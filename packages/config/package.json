@@ -1,0 +1,10 @@
+{
+  "name": "@lotostats/config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Configurations partagées (tsconfig, prettier) du monorepo LotoStats",
+  "files": [
+    "tsconfig.base.json",
+    "prettier.config.cjs"
+  ]
+}
