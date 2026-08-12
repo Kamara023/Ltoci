@@ -1,0 +1,944 @@
+Tu es un architecte logiciel senior, data scientist, ingénieur Machine Learning, expert en systèmes statistiques, expert backend/API, expert React Native et expert DevOps.
+
+Je veux concevoir et développer une plateforme complète d'analyse statistique des jeux de loterie en Côte d'Ivoire, avec comme premier périmètre le Loto Bonheur de la LONACI.
+
+IMPORTANT :
+Le système ne doit jamais prétendre connaître ou garantir les futurs résultats d'un tirage.
+Les tirages de loterie sont considérés comme aléatoires et indépendants.
+Le projet doit donc être présenté comme une plateforme d'ANALYSE STATISTIQUE, de MODÉLISATION et de GÉNÉRATION DE COMBINAISONS CANDIDATES basées sur les données historiques.
+
+Le projet doit être conçu comme un véritable produit logiciel évolutif, maintenable et potentiellement transformable en SaaS.
+
+==================================================
+1. OBJECTIF DU PROJET
+==================================================
+
+Créer une plateforme capable de :
+
+1. récupérer automatiquement les résultats historiques disponibles ;
+2. récupérer régulièrement les nouveaux résultats ;
+3. nettoyer et normaliser les données ;
+4. stocker l'ensemble des tirages dans une base de données ;
+5. analyser statistiquement les tirages ;
+6. détecter des tendances et régularités statistiques ;
+7. calculer différents indicateurs sur les numéros ;
+8. construire des modèles statistiques et de Machine Learning expérimentaux ;
+9. générer plusieurs combinaisons candidates ;
+10. expliquer pourquoi chaque combinaison a été générée ;
+11. comparer les performances historiques des différentes stratégies ;
+12. mesurer objectivement la qualité des modèles par backtesting ;
+13. afficher toutes les informations dans une application mobile et une interface web ;
+14. permettre l'évolution future vers plusieurs jeux et plusieurs sources de données.
+
+Le produit doit être pensé comme une plateforme DATA + ANALYTICS + AI et non comme un simple générateur de numéros.
+
+==================================================
+2. SOURCE DES DONNÉES
+==================================================
+
+Commencer avec le Loto Bonheur de Côte d'Ivoire.
+
+Le système doit prévoir un module d'ingestion de données capable de :
+
+- récupérer les résultats depuis une source officielle lorsque cela est techniquement et légalement possible ;
+- gérer les changements éventuels de structure de la source ;
+- détecter les doublons ;
+- détecter les résultats incomplets ;
+- détecter les anomalies ;
+- enregistrer la date et l'heure de collecte ;
+- conserver la source d'origine ;
+- journaliser chaque opération d'importation.
+
+Ne jamais contourner une protection technique, une authentification ou une mesure de sécurité d'un site.
+
+Prévoir également :
+
+- import CSV ;
+- import Excel ;
+- import JSON ;
+- saisie manuelle par administrateur ;
+- API externe future.
+
+Le système doit pouvoir fonctionner même si la source automatique devient temporairement indisponible.
+
+==================================================
+3. STRUCTURE DES DONNÉES
+==================================================
+
+Concevoir un modèle de données permettant de stocker au minimum :
+
+- jeu ;
+- type de tirage ;
+- date du tirage ;
+- heure du tirage si disponible ;
+- numéro du tirage ;
+- numéros principaux ;
+- numéros bonus/additionnels si le jeu en possède ;
+- source ;
+- date de collecte ;
+- statut de validation ;
+- métadonnées.
+
+Prévoir une architecture permettant d'ajouter ultérieurement d'autres jeux sans modifier profondément le système.
+
+Exemple :
+
+Game
+Draw
+DrawNumber
+DrawResult
+DataSource
+Prediction
+Analysis
+Model
+Backtest
+User
+Subscription
+Notification
+
+==================================================
+4. PIPELINE DATA
+==================================================
+
+Créer un pipeline :
+
+SOURCE
+   ↓
+INGESTION
+   ↓
+VALIDATION
+   ↓
+NETTOYAGE
+   ↓
+NORMALISATION
+   ↓
+STOCKAGE
+   ↓
+ANALYSE
+   ↓
+FEATURE ENGINEERING
+   ↓
+MODÈLES STATISTIQUES / ML
+   ↓
+BACKTESTING
+   ↓
+SCORING
+   ↓
+COMBINAISONS CANDIDATES
+   ↓
+API
+   ↓
+APPLICATION WEB / MOBILE
+
+Chaque étape doit être indépendante et testable.
+
+==================================================
+5. ANALYSES STATISTIQUES
+==================================================
+
+Implémenter au minimum :
+
+A. Fréquence globale
+
+Calculer :
+
+- fréquence de chaque numéro ;
+- fréquence relative ;
+- fréquence par période ;
+- fréquence annuelle ;
+- fréquence mensuelle ;
+- évolution de fréquence.
+
+B. Numéros chauds / froids
+
+Identifier :
+
+- numéros fréquemment observés ;
+- numéros moins fréquemment observés ;
+- évolution récente ;
+- comparaison court terme / moyen terme / long terme.
+
+Ne jamais interpréter automatiquement un numéro froid comme "plus susceptible" de sortir.
+
+C. Retard
+
+Calculer :
+
+- nombre de tirages depuis la dernière apparition ;
+- retard moyen ;
+- retard maximum historique ;
+- distribution des retards.
+
+D. Paires / triplets / groupes
+
+Analyser :
+
+- paires fréquentes ;
+- triplets fréquents ;
+- cooccurrences ;
+- associations statistiques ;
+- fréquence des associations.
+
+E. Consécutifs
+
+Analyser :
+
+- présence de nombres consécutifs ;
+- nombre de consécutifs par tirage ;
+- fréquence historique des configurations.
+
+F. Pair / impair
+
+Analyser les distributions :
+
+- 0/100 ;
+- 1/99 ;
+- etc. selon le format réel du jeu.
+
+Ne pas inventer les formats.
+Le système doit automatiquement adapter l'analyse aux règles du jeu.
+
+G. Haut / bas
+
+Analyser la distribution des numéros faibles et élevés selon l'intervalle réel du jeu.
+
+H. Somme des numéros
+
+Calculer :
+
+- somme totale ;
+- moyenne ;
+- médiane ;
+- min ;
+- max ;
+- distribution historique.
+
+I. Dispersion
+
+Analyser :
+
+- écart entre minimum et maximum ;
+- dispersion ;
+- concentration ;
+- répartition sur l'intervalle.
+
+J. Répétition entre deux tirages
+
+Mesurer :
+
+- nombre de numéros répétés ;
+- fréquence des répétitions ;
+- distribution historique.
+
+K. Fenêtres temporelles
+
+Toutes les analyses doivent pouvoir être effectuées sur :
+
+- historique complet ;
+- 100 derniers tirages ;
+- 50 derniers tirages ;
+- 20 derniers tirages ;
+- 10 derniers tirages ;
+- période personnalisée.
+
+==================================================
+6. FEATURE ENGINEERING
+==================================================
+
+Créer un moteur de génération de variables statistiques.
+
+Pour chaque numéro, calculer notamment :
+
+- fréquence globale ;
+- fréquence récente ;
+- fréquence pondérée ;
+- retard actuel ;
+- retard moyen ;
+- fréquence sur différentes fenêtres ;
+- fréquence de cooccurrence ;
+- position dans le tirage si pertinente ;
+- tendance historique ;
+- score de stabilité ;
+- score de volatilité.
+
+Créer également des features au niveau du tirage :
+
+- somme ;
+- moyenne ;
+- variance ;
+- dispersion ;
+- ratio pair/impair ;
+- ratio haut/bas ;
+- nombre de consécutifs ;
+- nombre de répétitions avec le tirage précédent ;
+- distribution des intervalles.
+
+==================================================
+7. MODÈLES STATISTIQUES
+==================================================
+
+Commencer par des modèles simples et interprétables avant d'utiliser du Machine Learning complexe.
+
+Implémenter et comparer :
+
+1. fréquence historique ;
+2. fréquence pondérée par récence ;
+3. score fréquence + retard ;
+4. score basé sur les cooccurrences ;
+5. modèle probabiliste ;
+6. Monte Carlo ;
+7. Random Forest ;
+8. Gradient Boosting ;
+9. XGBoost si pertinent ;
+10. modèles temporels si les données le justifient ;
+11. ensemble de modèles.
+
+IMPORTANT :
+
+Ne jamais utiliser un modèle complexe simplement pour dire qu'il utilise l'IA.
+
+Chaque modèle doit être comparé à une baseline aléatoire.
+
+==================================================
+8. GÉNÉRATION DE COMBINAISONS
+==================================================
+
+Créer un moteur de génération de combinaisons candidates.
+
+Le moteur doit :
+
+1. générer un grand ensemble de combinaisons candidates ;
+2. calculer un score pour chaque combinaison ;
+3. appliquer des contraintes statistiques ;
+4. éliminer les combinaisons excessivement similaires ;
+5. sélectionner les meilleures candidates ;
+6. fournir une explication du score.
+
+Exemple de score :
+
+CombinationScore =
+    fréquence
+    + récence
+    + cooccurrence
+    + équilibre pair/impair
+    + équilibre haut/bas
+    + dispersion
+    + diversité
+    - pénalités statistiques
+
+Les coefficients doivent être configurables.
+
+Ne jamais présenter ce score comme une probabilité réelle de gagner.
+
+==================================================
+9. MULTIPLES STRATÉGIES
+==================================================
+
+Le système doit proposer plusieurs stratégies :
+
+STRATEGY_RANDOM
+STRATEGY_FREQUENCY
+STRATEGY_HOT_NUMBERS
+STRATEGY_COLD_NUMBERS
+STRATEGY_RECENCY
+STRATEGY_BALANCED
+STRATEGY_COOCCURRENCE
+STRATEGY_STATISTICAL
+STRATEGY_ENSEMBLE
+
+Chaque stratégie doit être indépendante et testable.
+
+L'utilisateur doit pouvoir comparer les stratégies.
+
+==================================================
+10. BACKTESTING
+==================================================
+
+C'est une fonctionnalité obligatoire.
+
+Le système doit simuler ce qui aurait été produit par le modèle dans le passé.
+
+Exemple :
+
+Utiliser les tirages 1 → 500
+pour générer une combinaison pour le tirage 501.
+
+Puis :
+
+tirages 1 → 501
+→ prédiction 502.
+
+Continuer jusqu'au dernier tirage disponible.
+
+Mesurer :
+
+- nombre de correspondances ;
+- moyenne de correspondances ;
+- distribution des résultats ;
+- performance par stratégie ;
+- performance par période ;
+- performance de chaque modèle ;
+- comparaison avec sélection aléatoire.
+
+Afficher clairement les résultats.
+
+==================================================
+11. VALIDATION DES MODÈLES
+==================================================
+
+Interdire le data leakage.
+
+Un modèle ne doit jamais utiliser les résultats futurs pour prédire un tirage passé.
+
+Utiliser :
+
+- Time Series Split ;
+- Walk Forward Validation ;
+- Backtesting temporel ;
+- séparation stricte train/test.
+
+Comparer systématiquement :
+
+MODEL
+vs
+RANDOM BASELINE
+
+Calculer des métriques adaptées au problème.
+
+==================================================
+12. IA
+==================================================
+
+L'IA ne doit pas inventer les données.
+
+Elle doit recevoir les résultats statistiques calculés par le backend.
+
+Créer un module AI Analyst capable de transformer les statistiques en explications compréhensibles.
+
+Exemple :
+
+"Le numéro X présente une fréquence supérieure à sa moyenne historique sur les 50 derniers tirages, mais son retard actuel reste proche de sa moyenne historique."
+
+L'IA doit distinguer :
+
+- faits observés ;
+- statistiques ;
+- hypothèses ;
+- interprétation ;
+- limites.
+
+Elle ne doit jamais dire :
+
+"Le numéro X va sortir."
+
+Elle peut dire :
+
+"Selon le modèle, cette combinaison obtient un score statistique supérieur aux autres candidates."
+
+==================================================
+13. DASHBOARD
+==================================================
+
+Créer un dashboard moderne comprenant :
+
+- dernier tirage ;
+- historique ;
+- statistiques globales ;
+- numéros les plus fréquents ;
+- numéros les moins fréquents ;
+- numéros récemment observés ;
+- numéros avec retard élevé ;
+- paires fréquentes ;
+- graphiques ;
+- évolution des fréquences ;
+- comparaison des stratégies ;
+- performances du backtesting ;
+- dernières analyses ;
+- combinaisons candidates.
+
+==================================================
+14. APPLICATION MOBILE
+==================================================
+
+Créer une application React Native permettant :
+
+- Dashboard ;
+- Derniers résultats ;
+- Historique ;
+- Analyse ;
+- Combinaisons candidates ;
+- Détails d'une combinaison ;
+- Statistiques ;
+- Graphiques ;
+- Notifications ;
+- Profil ;
+- Abonnement.
+
+L'application doit être responsive et optimisée pour Android et iOS.
+
+==================================================
+15. APPLICATION WEB
+==================================================
+
+Créer également une application web.
+
+Elle doit contenir :
+
+- dashboard utilisateur ;
+- dashboard analytique ;
+- gestion des analyses ;
+- visualisation des données ;
+- backtesting ;
+- modèles ;
+- gestion des utilisateurs ;
+- gestion des abonnements ;
+- administration des sources de données.
+
+==================================================
+16. BACKOFFICE ADMIN
+==================================================
+
+Créer un véritable backoffice.
+
+Fonctionnalités :
+
+- gestion des jeux ;
+- gestion des tirages ;
+- validation des données ;
+- correction manuelle ;
+- import de données ;
+- surveillance du scraping ;
+- logs ;
+- statistiques système ;
+- gestion des utilisateurs ;
+- gestion des abonnements ;
+- gestion des modèles ;
+- activation/désactivation des stratégies ;
+- configuration des paramètres statistiques.
+
+==================================================
+17. NOTIFICATIONS
+==================================================
+
+Prévoir :
+
+- nouveau résultat disponible ;
+- nouvelle analyse disponible ;
+- nouvelle combinaison candidate ;
+- anomalie détectée ;
+- source indisponible ;
+- modèle recalculé.
+
+Utiliser des notifications push lorsque nécessaire.
+
+==================================================
+18. ARCHITECTURE TECHNIQUE
+==================================================
+
+Proposer une architecture moderne et évolutive.
+
+Stack privilégiée :
+
+Frontend mobile :
+React Native + Expo
+
+Frontend web :
+Next.js ou React
+
+Backend :
+Node.js + NestJS
+
+Database :
+PostgreSQL
+
+Cache :
+Redis
+
+Data/ML :
+Python
+
+API ML :
+FastAPI
+
+Jobs :
+BullMQ / Redis
+
+Conteneurisation :
+Docker + Docker Compose
+
+Reverse proxy :
+Nginx
+
+Monitoring :
+Prometheus + Grafana
+
+CI/CD :
+GitHub Actions
+
+Documentation :
+OpenAPI / Swagger
+
+L'architecture doit permettre au backend principal Node.js de communiquer avec le service Python chargé des analyses et modèles.
+
+==================================================
+19. API
+==================================================
+
+Créer une API REST documentée.
+
+Prévoir notamment :
+
+GET /games
+GET /games/:id
+GET /draws
+GET /draws/latest
+GET /draws/history
+GET /statistics/frequencies
+GET /statistics/hot
+GET /statistics/cold
+GET /statistics/delays
+GET /statistics/pairs
+GET /statistics/trends
+GET /analysis/latest
+POST /analysis/run
+GET /predictions
+GET /predictions/:id
+GET /backtests
+POST /backtests/run
+
+Les noms exacts peuvent être améliorés par l'architecte.
+
+==================================================
+20. BASE DE DONNÉES
+==================================================
+
+Proposer le schéma PostgreSQL complet.
+
+Pour chaque table :
+
+- nom ;
+- colonnes ;
+- types ;
+- clés primaires ;
+- clés étrangères ;
+- index ;
+- contraintes ;
+- relations ;
+- justification.
+
+Prévoir les migrations.
+
+==================================================
+21. SÉCURITÉ
+==================================================
+
+Implémenter :
+
+- JWT ;
+- refresh token ;
+- rôles ;
+- RBAC ;
+- validation des données ;
+- rate limiting ;
+- protection API ;
+- logs ;
+- audit ;
+- chiffrement des informations sensibles ;
+- gestion sécurisée des secrets ;
+- variables d'environnement.
+
+==================================================
+22. MONÉTISATION / SAAS
+==================================================
+
+Le projet doit être pensé dès le départ pour devenir un SaaS.
+
+Prévoir :
+
+FREE
+- statistiques limitées ;
+- historique limité ;
+- quelques analyses.
+
+PREMIUM
+- historique complet ;
+- analyses avancées ;
+- plus de stratégies ;
+- backtesting ;
+- notifications ;
+- analyses IA.
+
+PRO
+- analyses avancées ;
+- modèles supplémentaires ;
+- API ;
+- exports ;
+- fonctionnalités avancées.
+
+Prévoir une architecture permettant de modifier facilement les plans.
+
+==================================================
+23. QUALITÉ DES DONNÉES
+==================================================
+
+Créer un système de Data Quality.
+
+Contrôler :
+
+- doublons ;
+- valeurs manquantes ;
+- dates invalides ;
+- numéros hors plage ;
+- tirages incohérents ;
+- changements de format ;
+- données contradictoires.
+
+Chaque donnée importée doit avoir un statut :
+
+VALID
+INVALID
+PENDING_REVIEW
+
+==================================================
+24. OBSERVABILITÉ
+==================================================
+
+Mettre en place :
+
+- logs structurés ;
+- métriques ;
+- monitoring ;
+- alertes ;
+- historique des jobs ;
+- statut du scraping ;
+- statut du modèle ;
+- temps d'exécution ;
+- erreurs.
+
+==================================================
+25. TESTS
+==================================================
+
+Créer :
+
+- tests unitaires ;
+- tests d'intégration ;
+- tests API ;
+- tests du pipeline data ;
+- tests des modèles ;
+- tests de non-régression ;
+- tests du backtesting ;
+- tests frontend.
+
+Objectif :
+
+aucune fonctionnalité critique sans test.
+
+==================================================
+26. STRUCTURE DU PROJET
+==================================================
+
+Proposer une architecture de repository professionnelle.
+
+Exemple :
+
+/apps
+    /mobile
+    /web
+    /admin
+
+/services
+    /api
+    /ml
+    /data-ingestion
+
+/packages
+    /shared
+    /types
+    /config
+
+/infrastructure
+    /docker
+    /nginx
+    /monitoring
+
+/docs
+
+/scripts
+
+/tests
+
+Adapter cette structure si une meilleure architecture est proposée.
+
+==================================================
+27. ROADMAP
+==================================================
+
+Construire le projet en plusieurs phases.
+
+PHASE 1
+Fondations + base de données.
+
+PHASE 2
+Collecte et ingestion des résultats.
+
+PHASE 3
+Nettoyage et validation.
+
+PHASE 4
+Statistiques.
+
+PHASE 5
+Feature engineering.
+
+PHASE 6
+Premier moteur de scoring.
+
+PHASE 7
+Backtesting.
+
+PHASE 8
+Machine Learning expérimental.
+
+PHASE 9
+API.
+
+PHASE 10
+Application web.
+
+PHASE 11
+Application mobile.
+
+PHASE 12
+Backoffice.
+
+PHASE 13
+Notifications.
+
+PHASE 14
+SaaS / abonnements.
+
+PHASE 15
+Monitoring et production.
+
+Pour chaque phase, donner :
+
+- objectifs ;
+- tâches ;
+- fichiers à créer ;
+- commandes ;
+- dépendances ;
+- critères de validation ;
+- tests ;
+- résultat attendu.
+
+==================================================
+28. COMMANDES DE CRÉATION
+==================================================
+
+Ne te contente pas de donner une architecture théorique.
+
+Je veux les commandes concrètes permettant de commencer le projet.
+
+Précise :
+
+- versions recommandées ;
+- Node.js ;
+- Python ;
+- PostgreSQL ;
+- Redis ;
+- Docker ;
+- Expo ;
+- React Native ;
+- NestJS ;
+- FastAPI.
+
+Donner les commandes d'installation et d'initialisation.
+
+==================================================
+29. DÉVELOPPEMENT PROGRESSIF
+==================================================
+
+Ne génère PAS tout le projet en une seule réponse.
+
+Commence par :
+
+1. analyser les besoins ;
+2. proposer l'architecture ;
+3. proposer le modèle de données ;
+4. proposer l'arborescence ;
+5. proposer les versions ;
+6. proposer la roadmap ;
+7. attendre ma validation.
+
+Après validation, commencer l'implémentation PHASE 1.
+
+Pour chaque étape de développement :
+
+- expliquer ce qui est fait ;
+- fournir les commandes ;
+- fournir les fichiers complets lorsque nécessaire ;
+- expliquer où placer chaque fichier ;
+- expliquer comment lancer ;
+- expliquer comment tester ;
+- attendre la validation avant de passer à l'étape suivante.
+
+==================================================
+30. RÈGLES IMPORTANTES
+==================================================
+
+NE PAS :
+
+- inventer des résultats ;
+- inventer des données historiques ;
+- prétendre qu'un modèle garantit un gain ;
+- utiliser des données futures dans un backtest ;
+- cacher les limites statistiques ;
+- utiliser du Machine Learning uniquement pour faire "IA" ;
+- contourner les protections d'un site ;
+- mélanger les données de plusieurs jeux sans validation.
+
+TOUJOURS :
+
+- privilégier les données vérifiables ;
+- conserver la source ;
+- rendre les calculs reproductibles ;
+- comparer les modèles ;
+- comparer avec une baseline aléatoire ;
+- mesurer les performances ;
+- documenter les limites ;
+- journaliser les opérations ;
+- prévoir l'évolution SaaS.
+
+==================================================
+31. LIVRABLE INITIAL
+==================================================
+
+Pour ta première réponse, NE CODE PAS ENCORE.
+
+Produis uniquement :
+
+1. Vision globale du produit ;
+2. Architecture technique complète ;
+3. Architecture des données ;
+4. Schéma de base de données ;
+5. Architecture ML/Data ;
+6. Architecture API ;
+7. Architecture mobile ;
+8. Architecture web ;
+9. Architecture backoffice ;
+10. Architecture SaaS ;
+11. Arborescence complète du repository ;
+12. Technologies et versions recommandées ;
+13. Roadmap complète ;
+14. Risques techniques ;
+15. limites statistiques ;
+16. recommandations ;
+17. définition précise du MVP ;
+18. fonctionnalités post-MVP.
+
+Ensuite demande-moi confirmation avant de commencer la PHASE 1.
+
+Réponds en français.
+Adopte un niveau de conception Senior Software Engineer / Data Scientist / Solution Architect.
+Sois concret, technique et orienté production.

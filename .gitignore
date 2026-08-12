@@ -1,0 +1,32 @@
+# Dépendances
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# Builds
+dist/
+build/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# Environnement — jamais de secrets commités
+.env
+.env.*
+!.env.example
+
+# Logs & couverture
+*.log
+coverage/
+.pytest_cache/
+.ruff_cache/
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Artefacts ML
+services/ml/artifacts/
