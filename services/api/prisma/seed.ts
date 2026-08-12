@@ -79,6 +79,8 @@ async function seedDataSources(): Promise<void> {
       priority: 100,
       baseUrl: 'https://lotobonheur.ci',
     },
+    // Source technique : runs du moteur de contrôle qualité (PHASE 3).
+    { code: 'quality-engine', kind: 'MANUAL', label: 'Moteur de contrôle qualité', priority: 200 },
   ] as const;
   for (const s of sources) {
     await prisma.dataSource.upsert({
