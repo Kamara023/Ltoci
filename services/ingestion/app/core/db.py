@@ -20,7 +20,12 @@ _TABLES = {
 
 @lru_cache
 def get_engine() -> Engine:
-    return create_engine(get_settings().sqlalchemy_url, pool_pre_ping=True, pool_size=5)
+    return create_engine(
+        get_settings().sqlalchemy_url,
+        pool_pre_ping=True,
+        pool_size=5,
+        connect_args={"connect_timeout": 5},
+    )
 
 
 @lru_cache

@@ -81,6 +81,8 @@ async function seedDataSources(): Promise<void> {
     },
     // Source technique : runs du moteur de contrôle qualité (PHASE 3).
     { code: 'quality-engine', kind: 'MANUAL', label: 'Moteur de contrôle qualité', priority: 200 },
+    // Source technique : runs du moteur de statistiques (PHASE 4).
+    { code: 'stats-engine', kind: 'MANUAL', label: 'Moteur de statistiques', priority: 300 },
   ] as const;
   for (const s of sources) {
     await prisma.dataSource.upsert({

@@ -4,6 +4,7 @@ import { validateEnv } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { JobsModule } from './jobs/jobs.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { MlClientModule } from './modules/ml-client/ml-client.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 
@@ -18,6 +19,7 @@ import { RedisModule } from './redis/redis.module';
     }),
     PrismaModule,
     RedisModule,
+    MlClientModule,
     HealthModule,
     AdminModule,
     JobsModule,

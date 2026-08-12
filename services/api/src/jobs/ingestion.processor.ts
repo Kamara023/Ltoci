@@ -2,6 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { AdminService } from '../modules/admin/admin.service';
+import { MlClientService } from '../modules/ml-client/ml-client.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { INGESTION_QUEUE } from './jobs.constants';
 
@@ -17,6 +18,7 @@ export class IngestionProcessor extends WorkerHost {
   constructor(
     private readonly admin: AdminService,
     private readonly prisma: PrismaService,
+    private readonly ml: MlClientService,
   ) {
     super();
   }
@@ -30,6 +32,10 @@ export class IngestionProcessor extends WorkerHost {
         undefined,
         (job.data?.triggeredBy as string) ?? 'cron',
       );
+      // Fraîcheur des stats : recalcul best-effort après chaque collecte
+      // (la qualité est déjà enchaînée côté ingestion).
+      const refresh = await this.ml.refreshStatistics('cron');
+      if (!refresh.ok) this.logger.warn(`Refresh stats non déclenché : ${refresh.detail}`);
       await this.recordRun(job, jobKey, startedAt, 'SUCCESS', null);
       return result;
     } catch (err) {

@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { AdminQualityController } from './admin-quality.controller';
 import { AdminQualityService } from './admin-quality.service';
+import { AdminStatisticsController } from './admin-statistics.controller';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 
 @Module({
-  controllers: [AdminController, AdminQualityController],
+  controllers: [AdminController, AdminQualityController, AdminStatisticsController],
   providers: [AdminService, AdminQualityService],
   exports: [AdminService, AdminQualityService],
 })
