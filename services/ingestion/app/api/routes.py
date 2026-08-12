@@ -14,6 +14,7 @@ from app.core.db import db_is_up, get_engine, table
 from app.core.security import require_service_token
 from app.importers.files import PARSERS_BY_KIND
 from app.parsers.lonaci_api import FormatChangeError
+from app.quality.runner import run_quality
 from app.runlog import RunLogger
 from app.writer import DrawWriter
 
@@ -41,6 +42,16 @@ class CollectRequest(BaseModel):
     triggered_by: str = "manual"
 
 
+def _chain_quality(runlog: RunLogger, stats: dict) -> None:
+    """Statue immédiatement les tirages en attente après une ingestion.
+    Best-effort : un échec du contrôle qualité n'invalide pas l'ingestion."""
+    try:
+        quality = run_quality("pending", triggered_by="chained")
+        stats["quality"] = quality["stats"]
+    except Exception as exc:  # noqa: BLE001
+        runlog.event("WARN", f"Contrôle qualité enchaîné en échec : {exc}")
+
+
 def _collect_latest(triggered_by: str) -> dict:
     runlog = RunLogger(LONACI_SOURCE, triggered_by)
     try:
@@ -48,6 +59,7 @@ def _collect_latest(triggered_by: str) -> dict:
         for warning in parsed.warnings:
             runlog.event("WARN", warning)
         stats = DrawWriter(runlog).write(parsed.draws).as_dict()
+        _chain_quality(runlog, stats)
         status = "SUCCESS" if stats["invalid"] == 0 else "PARTIAL"
         runlog.finish(status, stats)
         return {"run_id": str(runlog.run_id), "status": status, "stats": stats}
@@ -109,6 +121,31 @@ def collect(req: CollectRequest, background: BackgroundTasks) -> dict:
     raise HTTPException(status_code=422, detail=f"Mode inconnu : {req.mode}")
 
 
+class QualityRequest(BaseModel):
+    scope: str = "pending"  # 'pending' | 'all' | 'run:<uuid>' | 'draw:<uuid>'
+    triggered_by: str = "manual"
+
+
+@router.post("/quality/run")
+def quality_run(req: QualityRequest, background: BackgroundTasks) -> dict:
+    if req.scope in ("all", "pending"):
+        if not db_is_up():
+            raise HTTPException(status_code=503, detail="Base de données indisponible")
+        background.add_task(run_quality, req.scope, req.triggered_by)
+        return {
+            "status": "ACCEPTED",
+            "detail": f"Contrôle qualité ({req.scope}) lancé — suivre ops.ingestion_runs",
+        }
+    if req.scope.startswith(("run:", "draw:")):
+        try:
+            return run_quality(req.scope, req.triggered_by)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"Contrôle échoué : {exc}") from exc
+    raise HTTPException(status_code=422, detail=f"Scope inconnu : {req.scope}")
+
+
 @router.post("/ingestion/import")
 async def import_file(
     file: UploadFile = File(...),
@@ -141,6 +178,7 @@ async def import_file(
         stats = DrawWriter(runlog).write(parsed.draws).as_dict()
         stats["rejected_lines"] = len(parsed.rejected)
         stats["found"] = parsed.found
+        _chain_quality(runlog, stats)
         status = "SUCCESS" if not parsed.rejected and stats["invalid"] == 0 else "PARTIAL"
         runlog.finish(status, stats)
         return {"run_id": str(runlog.run_id), "status": status, "stats": stats}
