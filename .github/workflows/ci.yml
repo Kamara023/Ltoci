@@ -32,6 +32,9 @@ jobs:
       REDIS_URL: redis://localhost:6379
       ML_SERVICE_URL: http://localhost:8000
       ML_SERVICE_TOKEN: ci-ml-token-0000
+      INGESTION_SERVICE_URL: http://localhost:8001
+      INGESTION_SERVICE_TOKEN: ci-ml-token-0000
+      ADMIN_BOOTSTRAP_TOKEN: ci-admin-token-000000
       SEED_ADMIN_EMAIL: ci-admin@lotostats.local
       SEED_ADMIN_PASSWORD: MotDePasseCI!2026
     steps:
@@ -56,18 +59,21 @@ jobs:
         run: pnpm run test:e2e
 
   python:
-    name: Python (ruff, pytest)
+    name: Python ${{ matrix.service }} (ruff, pytest)
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [ml, ingestion]
     defaults:
       run:
-        working-directory: services/ml
+        working-directory: services/${{ matrix.service }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: services/ml/requirements-dev.txt
+          cache-dependency-path: services/${{ matrix.service }}/requirements-dev.txt
       - run: pip install -r requirements-dev.txt
       - run: ruff check app tests
       - run: pytest -q

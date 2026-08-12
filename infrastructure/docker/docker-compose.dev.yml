@@ -45,6 +45,9 @@ services:
       REDIS_URL: redis://redis:6379
       ML_SERVICE_URL: http://ml:8000
       ML_SERVICE_TOKEN: ${ML_SERVICE_TOKEN:-dev-ml-token-a-changer}
+      INGESTION_SERVICE_URL: http://ingestion:8001
+      INGESTION_SERVICE_TOKEN: ${INGESTION_SERVICE_TOKEN:-dev-ml-token-a-changer}
+      ADMIN_BOOTSTRAP_TOKEN: ${ADMIN_BOOTSTRAP_TOKEN:-dev-admin-token-a-changer}
       API_PORT: "3001"
     ports:
       - "3001:3001"
@@ -64,6 +67,20 @@ services:
       ML_SERVICE_TOKEN: ${ML_SERVICE_TOKEN:-dev-ml-token-a-changer}
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ingestion:
+    profiles: ["full"]
+    build:
+      context: ../../services/ingestion
+      dockerfile: ../../infrastructure/docker/ingestion.Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lotostats}:${POSTGRES_PASSWORD:-lotostats_dev}@postgres:5432/${POSTGRES_DB:-lotostats}
+      INGESTION_SERVICE_TOKEN: ${INGESTION_SERVICE_TOKEN:-dev-ml-token-a-changer}
+    ports:
+      - "8001:8001"
     depends_on:
       postgres:
         condition: service_healthy
