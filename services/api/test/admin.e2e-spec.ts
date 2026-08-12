@@ -12,7 +12,8 @@ describe('Admin (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   const token = process.env.ADMIN_BOOTSTRAP_TOKEN ?? 'dev-admin-token-a-changer';
-  const TEST_DATE = '2031-01-05'; // date dédiée aux tests, nettoyée en afterAll
+  const TEST_DATE = '2031-01-05'; // dates dédiées aux tests, nettoyées en afterAll
+  const TEST_DATE_2 = '2031-01-06';
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -24,7 +25,9 @@ describe('Admin (e2e)', () => {
   });
 
   afterAll(async () => {
-    await prisma.draw.deleteMany({ where: { drawDate: new Date(TEST_DATE) } });
+    await prisma.draw.deleteMany({
+      where: { drawDate: { in: [new Date(TEST_DATE), new Date(TEST_DATE_2)] } },
+    });
     await prisma.auditLog.deleteMany({ where: { action: 'draw.manual_create' } });
     await app.close();
   });
@@ -72,7 +75,7 @@ describe('Admin (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/admin/draws')
       .set('X-Admin-Token', token)
-      .send({ drawTypeCode: 'etoile', drawDate: TEST_DATE, winningNumbers: [1, 2, 3, 4, 95] })
+      .send({ drawTypeCode: 'reveil', drawDate: TEST_DATE_2, winningNumbers: [1, 2, 3, 4, 95] })
       .expect(400);
     expect(JSON.stringify(res.body)).toContain('OUT_OF_RANGE');
   });

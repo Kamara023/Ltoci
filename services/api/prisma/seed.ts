@@ -47,30 +47,22 @@ async function seedGame(): Promise<string> {
     });
   }
 
-  // Types de tirage PROVISOIRES (metadata.provisional = true) :
-  // la liste réelle et les horaires seront confirmés en PHASE 2 lors de la
-  // mise en place de la collecte. Ne pas utiliser pour valider des données.
-  const provisionalDrawTypes: Array<{ code: string; name: string; time: string }> = [
-    { code: 'reveil', name: 'Réveil', time: '10:00' },
-    { code: 'etoile', name: 'Étoile', time: '13:00' },
-    { code: 'akwaba', name: 'Akwaba', time: '16:00' },
-    { code: 'monni', name: 'Monni', time: '18:15' },
-    { code: 'sika', name: 'Sika', time: '21:00' },
-  ];
-  for (const dt of provisionalDrawTypes) {
-    await prisma.drawType.upsert({
-      where: { gameId_code: { gameId: game.id, code: dt.code } },
-      update: {},
-      create: {
-        gameId: game.id,
-        code: dt.code,
-        name: dt.name,
-        scheduledTime: new Date(`1970-01-01T${dt.time}:00Z`),
-        daysOfWeek: [],
-        metadata: { provisional: true, note: 'À confirmer avec la source en PHASE 2' },
-      },
-    });
-  }
+  // Types de tirage : depuis la PHASE 2, le référentiel est piloté par les
+  // DONNÉES — le collecteur lonaci-api crée automatiquement les types réels
+  // (39 constatés) lors de l'ingestion. Un seul type est seedé pour que la
+  // saisie manuelle et les tests e2e fonctionnent sur une base vierge.
+  await prisma.drawType.upsert({
+    where: { gameId_code: { gameId: game.id, code: 'reveil' } },
+    update: {},
+    create: {
+      gameId: game.id,
+      code: 'reveil',
+      name: 'Reveil',
+      scheduledTime: new Date('1970-01-01T10:00:00Z'),
+      daysOfWeek: [],
+      metadata: { source: 'seed' },
+    },
+  });
   return game.id;
 }
 
