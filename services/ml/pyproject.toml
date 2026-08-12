@@ -1,0 +1,15 @@
+[project]
+name = "lotostats-ml"
+version = "0.1.0"
+description = "Service Data/ML LotoStats — statistiques, features, modèles, backtesting"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
