@@ -4,6 +4,8 @@ const validEnv = {
   DATABASE_URL: 'postgresql://user:pass@localhost:5432/lotostats',
   REDIS_URL: 'redis://localhost:6379',
   ML_SERVICE_TOKEN: 'un-token-suffisant',
+  INGESTION_SERVICE_TOKEN: 'un-token-suffisant',
+  ADMIN_BOOTSTRAP_TOKEN: 'un-token-admin-suffisant',
 };
 
 describe('validateEnv', () => {

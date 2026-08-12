@@ -80,12 +80,25 @@ async function seedDataSources(): Promise<void> {
     { code: 'csv-import', kind: 'CSV', label: 'Import de fichiers CSV', priority: 50 },
     { code: 'excel-import', kind: 'EXCEL', label: 'Import de fichiers Excel', priority: 50 },
     { code: 'json-import', kind: 'JSON', label: 'Import de fichiers JSON', priority: 50 },
+    {
+      code: 'lonaci-api',
+      kind: 'SCRAPER',
+      label: 'Collecteur lotobonheur.ci (API JSON publique)',
+      priority: 100,
+      baseUrl: 'https://lotobonheur.ci',
+    },
   ] as const;
   for (const s of sources) {
     await prisma.dataSource.upsert({
       where: { code: s.code },
       update: {},
-      create: { code: s.code, kind: s.kind, label: s.label, priority: s.priority },
+      create: {
+        code: s.code,
+        kind: s.kind,
+        label: s.label,
+        priority: s.priority,
+        baseUrl: 'baseUrl' in s ? s.baseUrl : null,
+      },
     });
   }
 }
