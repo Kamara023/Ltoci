@@ -1,0 +1,620 @@
+// ============================================================
+// LotoStats CI — schéma de base de données
+// Source de conception : docs/02-modele-donnees.md
+// Prisma est l'UNIQUE propriétaire des migrations ; le service
+// Python (SQLAlchemy) consomme ce schéma sans jamais faire de DDL.
+//
+// Compléments appliqués en SQL brut dans les migrations (non
+// exprimables en Prisma) : trigger d'intégrité des ensembles de
+// numéros, vue core.v_draw_numbers, index GIN sur les numéros,
+// index unique avec COALESCE sur analytics.number_stats.
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["core", "ops", "analytics", "ml", "app"]
+}
+
+// ==================== ENUMS ====================
+
+/// Statut de validation d'un tirage importé.
+enum ValidationStatus {
+  PENDING_REVIEW
+  VALID
+  INVALID
+
+  @@schema("core")
+}
+
+/// Nature d'une source de données.
+enum SourceKind {
+  SCRAPER
+  CSV
+  EXCEL
+  JSON
+  MANUAL
+  API
+
+  @@schema("ops")
+}
+
+/// Statut d'un run (ingestion, job, backtest).
+enum RunStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+
+  @@schema("ops")
+}
+
+/// Rôles applicatifs (RBAC).
+enum UserRole {
+  USER
+  ADMIN
+  SUPERADMIN
+
+  @@schema("app")
+}
+
+// ==================== SCHÉMA core — référentiel & tirages ====================
+
+/// Racine du multi-jeux. Les règles de tirage vivent dans GameNumberSetType.
+model Game {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String   @unique // 'loto-bonheur'
+  name        String
+  operator    String // 'LONACI'
+  countryCode String   @default("CI") @map("country_code") @db.Char(2)
+  isActive    Boolean  @default(true) @map("is_active")
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  setTypes  GameNumberSetType[]
+  drawTypes DrawType[]
+  draws     Draw[]
+
+  @@map("games")
+  @@schema("core")
+}
+
+/// Règles paramétrables d'un ensemble de numéros (Loto Bonheur :
+/// WINNING 5/1-90 et MACHINE 5/1-90). Toutes les analyses lisent ces bornes.
+model GameNumberSetType {
+  id           String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gameId       String @map("game_id") @db.Uuid
+  code         String // 'WINNING' | 'MACHINE' | 'BONUS'
+  label        String
+  numbersCount Int    @map("numbers_count") @db.SmallInt
+  numberMin    Int    @map("number_min") @db.SmallInt
+  numberMax    Int    @map("number_max") @db.SmallInt
+  displayOrder Int    @default(0) @map("display_order") @db.SmallInt
+
+  game       Game            @relation(fields: [gameId], references: [id])
+  numberSets DrawNumberSet[]
+
+  @@unique([gameId, code])
+  @@map("game_number_set_types")
+  @@schema("core")
+}
+
+/// Tirages nommés du jeu (Réveil, Étoile, Akwaba…). La liste réelle est
+/// confirmée en PHASE 2 avec la source (seed provisoire marqué en metadata).
+model DrawType {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gameId        String    @map("game_id") @db.Uuid
+  code          String // 'reveil', 'etoile'…
+  name          String
+  scheduledTime DateTime? @map("scheduled_time") @db.Time(0)
+  daysOfWeek    Int[]     @map("days_of_week") @db.SmallInt // vide = tous les jours
+  isActive      Boolean   @default(true) @map("is_active")
+  metadata      Json      @default("{}")
+
+  game        Game         @relation(fields: [gameId], references: [id])
+  draws       Draw[]
+  predictions Prediction[]
+
+  @@unique([gameId, code])
+  @@map("draw_types")
+  @@schema("core")
+}
+
+/// Un tirage. La contrainte unique (game, type, date) est LA défense
+/// anti-doublon : les collecteurs font de l'upsert sur cette clé naturelle.
+model Draw {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gameId         String           @map("game_id") @db.Uuid
+  drawTypeId     String           @map("draw_type_id") @db.Uuid
+  drawDate       DateTime         @map("draw_date") @db.Date
+  drawTime       DateTime?        @map("draw_time") @db.Time(0)
+  externalRef    String?          @map("external_ref")
+  status         ValidationStatus @default(PENDING_REVIEW)
+  sourceId       String           @map("source_id") @db.Uuid
+  ingestionRunId String?          @map("ingestion_run_id") @db.Uuid
+  collectedAt    DateTime         @map("collected_at") @db.Timestamptz(6)
+  validatedAt    DateTime?        @map("validated_at") @db.Timestamptz(6)
+  validatedById  String?          @map("validated_by") @db.Uuid
+  metadata       Json             @default("{}") // payload brut de la source
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  game          Game               @relation(fields: [gameId], references: [id])
+  drawType      DrawType           @relation(fields: [drawTypeId], references: [id])
+  source        DataSource         @relation(fields: [sourceId], references: [id])
+  ingestionRun  IngestionRun?      @relation(fields: [ingestionRunId], references: [id])
+  validatedBy   User?              @relation("DrawValidatedBy", fields: [validatedById], references: [id])
+  numberSets    DrawNumberSet[]
+  qualityIssues DataQualityIssue[]
+
+  // Références de traçabilité anti-fuite temporelle
+  numberStatSnapshots NumberStat[]    @relation("NumberStatAsOf")
+  modelTrainCutoffs   MlModel[]       @relation("ModelTrainCutoff")
+  predictionCutoffs   Prediction[]    @relation("PredictionCutoff")
+  backtestTargets     BacktestPoint[] @relation("BacktestTarget")
+  backtestCutoffs     BacktestPoint[] @relation("BacktestCutoff")
+
+  @@unique([gameId, drawTypeId, drawDate])
+  @@index([gameId, drawDate(sort: Desc)])
+  @@map("draws")
+  @@schema("core")
+}
+
+/// Un ensemble de numéros d'un tirage (gagnants OU machine).
+/// Intégrité garantie par trigger SQL : cardinalité, bornes, unicité, tri.
+model DrawNumberSet {
+  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  drawId    String @map("draw_id") @db.Uuid
+  setTypeId String @map("set_type_id") @db.Uuid
+  numbers   Int[]  @db.SmallInt // trié croissant, ex {4,17,33,58,89}
+
+  draw    Draw              @relation(fields: [drawId], references: [id], onDelete: Cascade)
+  setType GameNumberSetType @relation(fields: [setTypeId], references: [id])
+
+  @@unique([drawId, setTypeId])
+  @@map("draw_number_sets")
+  @@schema("core")
+}
+
+// ==================== SCHÉMA ops — sources, ingestion, qualité, jobs, audit ====================
+
+model DataSource {
+  id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code      String     @unique // 'manual-admin', 'csv-import', 'lonaci-site'…
+  kind      SourceKind
+  label     String
+  baseUrl   String?    @map("base_url")
+  config    Json       @default("{}") // sélecteurs, mapping colonnes…
+  isActive  Boolean    @default(true) @map("is_active")
+  priority  Int        @default(100) @db.SmallInt // ordre de confiance si conflit
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  ingestionRuns IngestionRun[]
+  draws         Draw[]
+
+  @@map("data_sources")
+  @@schema("ops")
+}
+
+/// Une exécution d'import (collecte, fichier ou saisie) — journalisation
+/// obligatoire de chaque opération d'importation.
+model IngestionRun {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sourceId    String    @map("source_id") @db.Uuid
+  triggeredBy String    @map("triggered_by") // 'cron' | 'manual' | 'backfill'
+  startedAt   DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt  DateTime? @map("finished_at") @db.Timestamptz(6)
+  status      RunStatus @default(RUNNING)
+  stats       Json      @default("{}") // {found, inserted, duplicates, invalid}
+  error       String?
+  fileName    String?   @map("file_name")
+
+  source        DataSource         @relation(fields: [sourceId], references: [id])
+  events        IngestionEvent[]
+  draws         Draw[]
+  qualityIssues DataQualityIssue[]
+
+  @@index([sourceId, startedAt(sort: Desc)])
+  @@map("ingestion_runs")
+  @@schema("ops")
+}
+
+model IngestionEvent {
+  id        BigInt   @id @default(autoincrement())
+  runId     String   @map("run_id") @db.Uuid
+  level     String // INFO | WARN | ERROR
+  message   String
+  context   Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  run IngestionRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@map("ingestion_events")
+  @@schema("ops")
+}
+
+model DataQualityIssue {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  drawId     String?   @map("draw_id") @db.Uuid
+  runId      String?   @map("run_id") @db.Uuid
+  ruleCode   String    @map("rule_code") // cf. QualityRuleCode (packages/types)
+  severity   String // 'BLOCKING' | 'WARNING'
+  details    Json      @default("{}")
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamptz(6)
+  resolvedBy String?   @map("resolved_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  draw     Draw?         @relation(fields: [drawId], references: [id], onDelete: Cascade)
+  run      IngestionRun? @relation(fields: [runId], references: [id])
+  resolver User?         @relation("IssueResolvedBy", fields: [resolvedBy], references: [id])
+
+  @@index([drawId])
+  @@map("data_quality_issues")
+  @@schema("ops")
+}
+
+/// Historique des jobs BullMQ (consultable au backoffice).
+model JobRun {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  queue      String
+  jobName    String    @map("job_name")
+  jobKey     String?   @map("job_key") // clé d'idempotence
+  status     RunStatus
+  startedAt  DateTime  @map("started_at") @db.Timestamptz(6)
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz(6)
+  durationMs Int?      @map("duration_ms")
+  error      String?
+
+  @@index([queue, startedAt(sort: Desc)])
+  @@map("job_runs")
+  @@schema("ops")
+}
+
+/// Audit de toute mutation admin (before/after).
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  userId     String?  @map("user_id") @db.Uuid
+  action     String // 'draw.correct', 'user.ban'…
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  before     Json?
+  after      Json?
+  ip         String?  @db.Inet
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+  @@schema("ops")
+}
+
+// ==================== SCHÉMA analytics — résultats matérialisés ====================
+// Recalculés par le service ML après chaque tirage validé. L'API ne fait que lire.
+
+model AnalysisWindow {
+  code String @id // 'ALL','LAST_100','LAST_50','LAST_20','LAST_10'…
+
+  numberStats NumberStat[]
+
+  @@map("analysis_windows")
+  @@schema("analytics")
+}
+
+/// Statistiques par numéro. Unicité métier assurée par index SQL brut :
+/// (game_id, set_type_id, COALESCE(draw_type_id, uuid_nil()), window_code, number).
+model NumberStat {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gameId       String   @map("game_id") @db.Uuid
+  setTypeId    String   @map("set_type_id") @db.Uuid
+  drawTypeId   String?  @map("draw_type_id") @db.Uuid // NULL = tous tirages confondus
+  windowCode   String   @map("window_code")
+  number       Int      @db.SmallInt
+  frequency    Int
+  relativeFreq Decimal  @map("relative_freq") @db.Decimal(8, 6)
+  currentGap   Int      @map("current_gap") // retard actuel (nb de tirages)
+  avgGap       Decimal? @map("avg_gap") @db.Decimal(8, 2)
+  maxGap       Int?     @map("max_gap")
+  lastSeenDate DateTime? @map("last_seen_date") @db.Date
+  trend        Decimal? @db.Decimal(8, 4) // pente de fréquence récente
+  computedAt   DateTime @map("computed_at") @db.Timestamptz(6)
+  asOfDrawId   String   @map("as_of_draw_id") @db.Uuid // traçabilité
+
+  window   AnalysisWindow @relation(fields: [windowCode], references: [code])
+  asOfDraw Draw           @relation("NumberStatAsOf", fields: [asOfDrawId], references: [id])
+
+  @@index([gameId, windowCode])
+  @@map("number_stats")
+  @@schema("analytics")
+}
+
+/// Paires fréquentes avec lift (fréquence observée / attendue).
+model PairStat {
+  gameId     String   @map("game_id") @db.Uuid
+  setTypeId  String   @map("set_type_id") @db.Uuid
+  windowCode String   @map("window_code")
+  numberA    Int      @map("number_a") @db.SmallInt // a < b
+  numberB    Int      @map("number_b") @db.SmallInt
+  frequency  Int
+  lift       Decimal? @db.Decimal(8, 4)
+  computedAt DateTime @map("computed_at") @db.Timestamptz(6)
+
+  @@id([gameId, setTypeId, windowCode, numberA, numberB])
+  @@map("pair_stats")
+  @@schema("analytics")
+}
+
+/// Distributions par tirage (somme, pair/impair, haut/bas, consécutifs…).
+model DrawShapeStat {
+  gameId     String   @map("game_id") @db.Uuid
+  setTypeId  String   @map("set_type_id") @db.Uuid
+  windowCode String   @map("window_code")
+  metric     String // 'sum','spread','odd_count','high_count','consecutive_count','repeat_prev_count'
+  histogram  Json // {"valeur": effectif, …}
+  summary    Json // {mean, median, min, max, std}
+  computedAt DateTime @map("computed_at") @db.Timestamptz(6)
+
+  @@id([gameId, setTypeId, windowCode, metric])
+  @@map("draw_shape_stats")
+  @@schema("analytics")
+}
+
+// ==================== SCHÉMA ml — stratégies, modèles, prédictions, backtests ====================
+
+model Strategy {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code          String   @unique // 'STRATEGY_RANDOM'…
+  name          String
+  description   String
+  defaultConfig Json     @default("{}") @map("default_config") // coefficients de score, fenêtres…
+  isEnabled     Boolean  @default(true) @map("is_enabled")
+  minPlan       String   @default("FREE") @map("min_plan") // gating SaaS
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  models      MlModel[]
+  predictions Prediction[]
+  backtests   Backtest[]
+
+  @@map("strategies")
+  @@schema("ml")
+}
+
+/// Artefact ML entraîné, versionné, avec cutoff de train (anti-leakage).
+model MlModel {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  strategyId        String?  @map("strategy_id") @db.Uuid
+  name              String
+  version           String
+  algo              String // 'random_forest','xgboost'…
+  params            Json
+  trainedOnDraws    Int?     @map("trained_on_draws")
+  trainCutoffDrawId String?  @map("train_cutoff_draw_id") @db.Uuid
+  artifactPath      String?  @map("artifact_path")
+  metrics           Json?
+  status            String   @default("ACTIVE")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  strategy        Strategy?    @relation(fields: [strategyId], references: [id])
+  trainCutoffDraw Draw?        @relation("ModelTrainCutoff", fields: [trainCutoffDrawId], references: [id])
+  predictions     Prediction[]
+  backtests       Backtest[]
+
+  @@unique([name, version])
+  @@map("models")
+  @@schema("ml")
+}
+
+/// Un lot de combinaisons candidates généré pour un tirage cible.
+/// dataset_cutoff_draw_id = dernier tirage connu au moment du calcul.
+model Prediction {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gameId              String    @map("game_id") @db.Uuid
+  drawTypeId          String?   @map("draw_type_id") @db.Uuid
+  targetDrawDate      DateTime  @map("target_draw_date") @db.Date
+  strategyId          String    @map("strategy_id") @db.Uuid
+  modelId             String?   @map("model_id") @db.Uuid
+  configUsed          Json      @map("config_used")
+  datasetCutoffDrawId String    @map("dataset_cutoff_draw_id") @db.Uuid
+  generatedAt         DateTime  @default(now()) @map("generated_at") @db.Timestamptz(6)
+
+  drawType          DrawType?               @relation(fields: [drawTypeId], references: [id])
+  strategy          Strategy                @relation(fields: [strategyId], references: [id])
+  model             MlModel?                @relation(fields: [modelId], references: [id])
+  datasetCutoffDraw Draw                    @relation("PredictionCutoff", fields: [datasetCutoffDrawId], references: [id])
+  combinations      PredictionCombination[]
+
+  @@unique([gameId, drawTypeId, targetDrawDate, strategyId])
+  @@index([gameId, targetDrawDate(sort: Desc)])
+  @@map("predictions")
+  @@schema("ml")
+}
+
+/// Une combinaison candidate : score décomposé (auditable) + explication.
+model PredictionCombination {
+  id             String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  predictionId   String @map("prediction_id") @db.Uuid
+  rank           Int    @db.SmallInt
+  numbers        Int[]  @db.SmallInt
+  score          Decimal @db.Decimal(10, 4)
+  scoreBreakdown Json   @map("score_breakdown") // {frequency, recency, cooccurrence, …}
+  explanation    String // texte généré par l'AI Analyst
+
+  prediction Prediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+
+  @@unique([predictionId, rank])
+  @@map("prediction_combinations")
+  @@schema("ml")
+}
+
+model Backtest {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gameId       String    @map("game_id") @db.Uuid
+  drawTypeId   String?   @map("draw_type_id") @db.Uuid
+  strategyId   String    @map("strategy_id") @db.Uuid
+  modelId      String?   @map("model_id") @db.Uuid
+  config       Json
+  fromDrawDate DateTime  @map("from_draw_date") @db.Date
+  toDrawDate   DateTime  @map("to_draw_date") @db.Date
+  status       RunStatus @default(RUNNING)
+  metrics      Json? // {avg_matches, match_distribution, vs_random, by_period}
+  startedAt    DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt   DateTime? @map("finished_at") @db.Timestamptz(6)
+
+  strategy Strategy        @relation(fields: [strategyId], references: [id])
+  model    MlModel?        @relation(fields: [modelId], references: [id])
+  points   BacktestPoint[]
+
+  @@map("backtests")
+  @@schema("ml")
+}
+
+/// Détail pas-à-pas du walk-forward. Invariant anti-leakage :
+/// cutoff_draw_id précède TOUJOURS target_draw_id (contrôlé applicativement + testé).
+model BacktestPoint {
+  id           BigInt @id @default(autoincrement())
+  backtestId   String @map("backtest_id") @db.Uuid
+  targetDrawId String @map("target_draw_id") @db.Uuid
+  cutoffDrawId String @map("cutoff_draw_id") @db.Uuid
+  predicted    Int[]  @db.SmallInt
+  actual       Int[]  @db.SmallInt
+  matches      Int    @db.SmallInt
+
+  backtest   Backtest @relation(fields: [backtestId], references: [id], onDelete: Cascade)
+  targetDraw Draw     @relation("BacktestTarget", fields: [targetDrawId], references: [id])
+  cutoffDraw Draw     @relation("BacktestCutoff", fields: [cutoffDrawId], references: [id])
+
+  @@index([backtestId])
+  @@map("backtest_points")
+  @@schema("ml")
+}
+
+// ==================== SCHÉMA app — utilisateurs, SaaS, notifications ====================
+
+model User {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email           String    @unique // normalisé en minuscules à l'écriture
+  passwordHash    String    @map("password_hash") // argon2id
+  displayName     String?   @map("display_name")
+  role            UserRole  @default(USER)
+  isActive        Boolean   @default(true) @map("is_active")
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  refreshTokens  RefreshToken[]
+  subscriptions  Subscription[]
+  apiKeys        ApiKey[]
+  notifications  Notification[]
+  pushTokens     PushToken[]
+  validatedDraws Draw[]             @relation("DrawValidatedBy")
+  resolvedIssues DataQualityIssue[] @relation("IssueResolvedBy")
+  auditLogs      AuditLog[]
+
+  @@map("users")
+  @@schema("app")
+}
+
+/// Refresh tokens rotatifs — stockés hashés, révocables par session.
+model RefreshToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash") // jamais le token en clair
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  userAgent String?   @map("user_agent")
+  ip        String?   @db.Inet
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+  @@schema("app")
+}
+
+/// Les droits sont des DONNÉES (entitlements JSONB), pas du code.
+/// Modifier un plan = update d'une ligne.
+model Plan {
+  code            String @id // 'FREE' | 'PREMIUM' | 'PRO'
+  name            String
+  priceMonthlyXof Int    @default(0) @map("price_monthly_xof")
+  entitlements    Json
+  // {history_days, strategies[], backtesting, backtesting_run, api_access,
+  //  exports, ai_analyst, notifications, rate_limit_per_min}
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+  @@schema("app")
+}
+
+model Subscription {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  planCode   String    @map("plan_code")
+  status     String // 'ACTIVE','CANCELLED','EXPIRED','TRIAL'
+  startedAt  DateTime  @map("started_at") @db.Timestamptz(6)
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz(6)
+  paymentRef String?   @map("payment_ref") // réf. agrégateur (CinetPay/Paystack…)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+  plan Plan @relation(fields: [planCode], references: [code])
+
+  @@index([userId, status])
+  @@map("subscriptions")
+  @@schema("app")
+}
+
+/// Clés API du plan PRO — stockées hashées, révocables.
+model ApiKey {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  keyHash    String    @unique @map("key_hash")
+  label      String?
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+  @@schema("app")
+}
+
+model Notification {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String?   @map("user_id") @db.Uuid // NULL = broadcast
+  type      String // cf. NotificationType (packages/types)
+  title     String
+  body      String
+  payload   Json      @default("{}")
+  readAt    DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
+  @@schema("app")
+}
+
+/// Tokens push Expo (phase mobile).
+model PushToken {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique
+  platform  String // 'ios' | 'android'
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("push_tokens")
+  @@schema("app")
+}
