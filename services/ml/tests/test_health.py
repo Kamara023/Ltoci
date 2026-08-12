@@ -2,13 +2,10 @@
 
 import os
 
-os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost:9/absent")
-os.environ.setdefault("ML_SERVICE_TOKEN", "token-de-test-123456")
+from fastapi.testclient import TestClient
 
-from fastapi.testclient import TestClient  # noqa: E402
-
-import app.api.health as health_module  # noqa: E402
-from app.main import app  # noqa: E402
+import app.api.health as health_module
+from app.main import app
 
 client = TestClient(app)
 TOKEN = os.environ["ML_SERVICE_TOKEN"]
