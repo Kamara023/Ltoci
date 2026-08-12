@@ -1,0 +1,73 @@
+# Environnement de développement LotoStats.
+# Usage :  docker compose -f infrastructure/docker/docker-compose.dev.yml up -d
+# Par défaut : PostgreSQL + Redis uniquement (API et ML tournent nativement en dev).
+# Profil "full" : ajoute les conteneurs api et ml (parité prod).
+name: lotostats-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lotostats}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lotostats_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-lotostats}
+    ports:
+      # 5433 côté hôte : un PostgreSQL local Windows occupe déjà 5432.
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lotostats} -d ${POSTGRES_DB:-lotostats}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      # 6380 côté hôte : un relay WSL écoute déjà sur localhost:6379.
+      - "6380:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    profiles: ["full"]
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/api.Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lotostats}:${POSTGRES_PASSWORD:-lotostats_dev}@postgres:5432/${POSTGRES_DB:-lotostats}
+      REDIS_URL: redis://redis:6379
+      ML_SERVICE_URL: http://ml:8000
+      ML_SERVICE_TOKEN: ${ML_SERVICE_TOKEN:-dev-ml-token-a-changer}
+      API_PORT: "3001"
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  ml:
+    profiles: ["full"]
+    build:
+      context: ../../services/ml
+      dockerfile: ../../infrastructure/docker/ml.Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lotostats}:${POSTGRES_PASSWORD:-lotostats_dev}@postgres:5432/${POSTGRES_DB:-lotostats}
+      ML_SERVICE_TOKEN: ${ML_SERVICE_TOKEN:-dev-ml-token-a-changer}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
