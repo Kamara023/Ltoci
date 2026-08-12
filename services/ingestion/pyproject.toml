@@ -1,0 +1,19 @@
+[project]
+name = "lotostats-ingestion"
+version = "0.1.0"
+description = "Service d'ingestion LotoStats — collecteurs, imports fichiers, journalisation"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# File()/Form() en valeurs par défaut : idiome FastAPI standard.
+"app/api/*" = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

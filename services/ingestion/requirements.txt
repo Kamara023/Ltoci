@@ -1,0 +1,11 @@
+# Dépendances d'exécution du service ingestion (Python 3.12)
+fastapi>=0.115
+uvicorn[standard]>=0.32
+sqlalchemy>=2.0.36
+psycopg[binary]>=3.2
+pydantic-settings>=2.6
+structlog>=24.4
+httpx>=0.28
+tenacity>=9.0
+openpyxl>=3.1
+python-multipart>=0.0.18
