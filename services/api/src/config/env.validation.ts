@@ -13,6 +13,8 @@ export const envSchema = z.object({
   ML_SERVICE_TOKEN: z.string().min(8),
   INGESTION_SERVICE_URL: z.string().url().default('http://localhost:8001'),
   INGESTION_SERVICE_TOKEN: z.string().min(8),
+  JWT_ACCESS_SECRET: z.string().min(16),
+  JWT_REFRESH_SECRET: z.string().min(16),
   // Token d'amorçage du backoffice — REMPLACÉ par JWT/RBAC en PHASE 5.
   ADMIN_BOOTSTRAP_TOKEN: z.string().min(12),
 });

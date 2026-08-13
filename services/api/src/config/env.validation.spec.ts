@@ -6,6 +6,8 @@ const validEnv = {
   ML_SERVICE_TOKEN: 'un-token-suffisant',
   INGESTION_SERVICE_TOKEN: 'un-token-suffisant',
   ADMIN_BOOTSTRAP_TOKEN: 'un-token-admin-suffisant',
+  JWT_ACCESS_SECRET: 'secret-access-de-test-16c',
+  JWT_REFRESH_SECRET: 'secret-refresh-de-test-16',
 };
 
 describe('validateEnv', () => {
