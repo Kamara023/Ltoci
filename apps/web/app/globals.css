@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+/* ==========================================================
+   Jetons de design LotoStats — clair d'abord, sombre par media
+   query ET data-theme (le choix explicite gagne dans les 2 sens).
+   Couleurs de données : palette dataviz validée (série 1 = bleu,
+   accent chaud = orange) — cf. skill dataviz.
+   ========================================================== */
+:root {
+  --surface: #fcfcfb;
+  --surface-2: #f4f4f1;
+  --border: #e4e4df;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --ink-3: #8a8983;
+  --accent: #2a78d6;      /* série 1 (bleu) */
+  --accent-soft: #e8f0fb;
+  --hot: #eb6834;         /* série 2 (orange) */
+  --hot-soft: #fdeee6;
+  --cold: #2a78d6;
+  --cold-soft: #e8f0fb;
+  --ok: #008300;
+  --warn: #c98500;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface: #1a1a19;
+    --surface-2: #232322;
+    --border: #373734;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --ink-3: #8a8983;
+    --accent: #3987e5;
+    --accent-soft: #1d2a3c;
+    --hot: #d95926;
+    --hot-soft: #35221a;
+    --cold: #3987e5;
+    --cold-soft: #1d2a3c;
+    --ok: #33a133;
+    --warn: #c98500;
+  }
+}
+:root[data-theme="dark"] {
+  --surface: #1a1a19;
+  --surface-2: #232322;
+  --border: #373734;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --ink-3: #8a8983;
+  --accent: #3987e5;
+  --accent-soft: #1d2a3c;
+  --hot: #d95926;
+  --hot-soft: #35221a;
+  --cold: #3987e5;
+  --cold-soft: #1d2a3c;
+  --ok: #33a133;
+  --warn: #c98500;
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-hot: var(--hot);
+  --color-hot-soft: var(--hot-soft);
+  --color-cold: var(--cold);
+  --color-cold-soft: var(--cold-soft);
+}
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif;
+}
