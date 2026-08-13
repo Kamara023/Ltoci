@@ -52,10 +52,11 @@ py -3.12 -m venv .venv ; .\.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
 uvicorn app.main:app --reload --port 8000   # health: /internal/health (token requis)
 
-# NB (front en mode production) : toujours ARRÊTER `next start` avant de
-# relancer `next build` — reconstruire sous un serveur en marche fait
-# servir un HTML qui référence des chunks supprimés (JS 404, pages inertes).
-# En développement, préférer simplement `pnpm run dev`.
+# IMPORTANT (fronts en local) : servir web et admin en MODE DEV
+# (`pnpm run dev` dans apps/web et apps/admin) — jamais `next start` en
+# local : tout `next build` (y compris via `pnpm turbo build`) remplace
+# les chunks sous le serveur et casse les pages (JS 404/500).
+# `next build` + `next start` sont réservés à la CI et à la production.
 
 # 5. Qualité
 pnpm turbo lint build test           # racine — lint + build + tests Node
