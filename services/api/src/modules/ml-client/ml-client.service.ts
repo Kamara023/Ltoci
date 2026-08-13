@@ -84,6 +84,61 @@ export class MlClientService {
     }
   }
 
+  /** Évalue les prévisions dont le tirage cible est arrivé (synchrone,
+   * rapide) puis régénère les prévisions des prochains tirages (fond).
+   * Ordre IMPORTANT : évaluer AVANT de régénérer, sinon la prévision
+   * active serait supersedée avant sa comparaison au résultat réel. */
+  async evaluateForecasts(triggeredBy = 'api'): Promise<{ ok: boolean; detail: string }> {
+    try {
+      const res = await fetch(this.url('/internal/forecasts/evaluate'), {
+        method: 'POST',
+        headers: this.headers(),
+        body: JSON.stringify({ triggered_by: triggeredBy }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { stats?: unknown; detail?: string };
+      if (!res.ok) return { ok: false, detail: `HTTP ${res.status}: ${JSON.stringify(body)}` };
+      await this.invalidateResponseCache();
+      return { ok: true, detail: JSON.stringify(body.stats ?? body.detail ?? 'OK') };
+    } catch (err) {
+      const detail = (err as Error).message;
+      this.logger.warn(`Service ML injoignable (forecasts/evaluate) : ${detail}`);
+      return { ok: false, detail };
+    }
+  }
+
+  /** Génère les prévisions TOP 5 des prochains tirages (tâche de fond). */
+  async generateForecasts(triggeredBy = 'api'): Promise<{ ok: boolean; detail: string }> {
+    try {
+      const res = await fetch(this.url('/internal/forecasts/generate'), {
+        method: 'POST',
+        headers: this.headers(),
+        body: JSON.stringify({ triggered_by: triggeredBy }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { detail?: string };
+      if (!res.ok) return { ok: false, detail: `HTTP ${res.status}: ${JSON.stringify(body)}` };
+      await this.invalidateResponseCache();
+      return { ok: true, detail: body.detail ?? 'ACCEPTED' };
+    } catch (err) {
+      const detail = (err as Error).message;
+      this.logger.warn(`Service ML injoignable (forecasts/generate) : ${detail}`);
+      return { ok: false, detail };
+    }
+  }
+
+  /** État des prévisions (actives, évaluées, dernière génération). */
+  async forecastsStatus(): Promise<Record<string, unknown>> {
+    try {
+      const res = await fetch(this.url('/internal/forecasts/status'), {
+        headers: this.headers(),
+      });
+      if (!res.ok) return { available: false, detail: `HTTP ${res.status}` };
+      const body = (await res.json()) as Record<string, unknown>;
+      return { available: true, ...body };
+    } catch (err) {
+      return { available: false, detail: (err as Error).message };
+    }
+  }
+
   /** Purge le cache de réponses (motif cache:*) — appelé quand les
    * statistiques vont être recalculées. Best-effort. */
   private async invalidateResponseCache(): Promise<void> {

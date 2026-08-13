@@ -33,4 +33,22 @@ export class AdminStatisticsController {
   runBacktests() {
     return this.ml.runBacktests('admin');
   }
+
+  @Post('forecasts/generate')
+  @ApiOperation({ summary: 'Générer les prévisions TOP 5 des prochains tirages (service ML)' })
+  generateForecasts() {
+    return this.ml.generateForecasts('admin');
+  }
+
+  @Post('forecasts/evaluate')
+  @ApiOperation({ summary: 'Évaluer les prévisions dont le tirage cible est arrivé' })
+  evaluateForecasts() {
+    return this.ml.evaluateForecasts('admin');
+  }
+
+  @Get('forecasts/status')
+  @ApiOperation({ summary: 'État des prévisions (actives, évaluées, dernière génération)' })
+  forecastsStatus() {
+    return this.ml.forecastsStatus();
+  }
 }

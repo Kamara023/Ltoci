@@ -44,6 +44,13 @@ export class IngestionProcessor extends WorkerHost {
       if (!refresh.ok) this.logger.warn(`Refresh stats non déclenché : ${refresh.detail}`);
       const gen = await this.ml.generatePredictions('cron');
       if (!gen.ok) this.logger.warn(`Génération candidates non déclenchée : ${gen.detail}`);
+      // Prévisions TOP 5 : ÉVALUER d'abord (comparer les prévisions figées
+      // aux tirages qui viennent d'arriver), puis régénérer pour les
+      // prochaines cibles. Best-effort comme le reste de la chaîne.
+      const evaluation = await this.ml.evaluateForecasts('cron');
+      if (!evaluation.ok) this.logger.warn(`Évaluation prévisions non faite : ${evaluation.detail}`);
+      const forecasts = await this.ml.generateForecasts('cron');
+      if (!forecasts.ok) this.logger.warn(`Génération prévisions non déclenchée : ${forecasts.detail}`);
       await this.recordRun(job, jobKey, startedAt, 'SUCCESS', null);
       return result;
     } catch (err) {
