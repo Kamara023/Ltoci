@@ -51,12 +51,14 @@ def test_backtest_random_et_antifuite():
         ).scalar()
         assert violations == 0
 
-        # Remplacement : un seul backtest « courant » par stratégie.
+        # Remplacement : un seul backtest « courant » GLOBAL par stratégie
+        # (FORECAST_CONSENSUS a en plus des backtests par type de tirage).
         backtests_t = table("ml", "backtests")
         strategies_t = table("ml", "strategies")
         per_strategy = conn.execute(
             select(strategies_t.c.code, func.count())
             .select_from(backtests_t.join(strategies_t))
+            .where(backtests_t.c.draw_type_id.is_(None))
             .group_by(strategies_t.c.code)
         ).all()
     for code, count in per_strategy:

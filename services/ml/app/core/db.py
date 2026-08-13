@@ -12,7 +12,8 @@ _TABLES = {
     "core": ["games", "game_number_set_types", "draw_types", "draws", "draw_number_sets"],
     "analytics": ["analysis_windows", "number_stats", "pair_stats", "draw_shape_stats"],
     "ml": ["strategies", "models", "predictions", "prediction_combinations",
-           "backtests", "backtest_points"],
+           "backtests", "backtest_points", "forecasts", "forecast_entries",
+           "forecast_results"],
     "ops": ["data_sources", "ingestion_runs", "ingestion_events"],
 }
 
