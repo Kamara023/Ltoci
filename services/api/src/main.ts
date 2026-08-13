@@ -11,7 +11,7 @@ async function bootstrap(): Promise<void> {
   // CORS : liste blanche d'origines (le front navigateur appelle l'API
   // cross-origin ; les pages server-rendered n'y sont pas soumises).
   app.enableCors({
-    origin: (process.env.CORS_ORIGINS ?? 'http://localhost:3002')
+    origin: (process.env.CORS_ORIGINS ?? 'http://localhost:3002,http://localhost:3003')
       .split(',')
       .map((o) => o.trim())
       .filter(Boolean),

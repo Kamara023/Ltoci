@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/* Backoffice LotoStats — thème AMBRE volontairement distinct du site
+   public (bleu) : impossible de confondre les deux applications. */
+:root {
+  --surface: #faf9f7;
+  --surface-2: #f1efe9;
+  --border: #e2ded4;
+  --ink: #171512;
+  --ink-2: #5b564c;
+  --ink-3: #8f887a;
+  --accent: #b45309;      /* ambre foncé */
+  --accent-soft: #fdf0e0;
+  --ok: #008300;
+  --warn: #c98500;
+  --err: #ce2b21;
+  --err-soft: #fdeae8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface: #191713;
+    --surface-2: #22201a;
+    --border: #3a362c;
+    --ink: #f4f2ec;
+    --ink-2: #bdb7a8;
+    --ink-3: #8f887a;
+    --accent: #d97706;
+    --accent-soft: #33261a;
+    --ok: #33a133;
+    --warn: #c98500;
+    --err: #e66767;
+    --err-soft: #33201e;
+  }
+}
+:root[data-theme="dark"] {
+  --surface: #191713;
+  --surface-2: #22201a;
+  --border: #3a362c;
+  --ink: #f4f2ec;
+  --ink-2: #bdb7a8;
+  --ink-3: #8f887a;
+  --accent: #d97706;
+  --accent-soft: #33261a;
+  --ok: #33a133;
+  --warn: #c98500;
+  --err: #e66767;
+  --err-soft: #33201e;
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-err: var(--err);
+  --color-err-soft: var(--err-soft);
+}
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif;
+}
