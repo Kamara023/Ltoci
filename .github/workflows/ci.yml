@@ -35,6 +35,8 @@ jobs:
       INGESTION_SERVICE_URL: http://localhost:8001
       INGESTION_SERVICE_TOKEN: ci-ml-token-0000
       ADMIN_BOOTSTRAP_TOKEN: ci-admin-token-000000
+      JWT_ACCESS_SECRET: ci-access-secret-0000000
+      JWT_REFRESH_SECRET: ci-refresh-secret-000000
       SEED_ADMIN_EMAIL: ci-admin@lotostats.local
       SEED_ADMIN_PASSWORD: MotDePasseCI!2026
     steps:

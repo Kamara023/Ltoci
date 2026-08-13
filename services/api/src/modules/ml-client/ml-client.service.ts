@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { RedisService } from '../../redis/redis.service';
 
 /**
  * Client HTTP interne du service ML (statistiques, puis modèles/backtests
@@ -10,7 +11,10 @@ import { ConfigService } from '@nestjs/config';
 export class MlClientService {
   private readonly logger = new Logger(MlClientService.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly redis: RedisService,
+  ) {}
 
   private headers(): Record<string, string> {
     return {
@@ -32,11 +36,55 @@ export class MlClientService {
       );
       const body = (await res.json().catch(() => ({}))) as { detail?: string };
       if (!res.ok) return { ok: false, detail: `HTTP ${res.status}: ${JSON.stringify(body)}` };
+      await this.invalidateResponseCache();
       return { ok: true, detail: body.detail ?? 'ACCEPTED' };
     } catch (err) {
       const detail = (err as Error).message;
       this.logger.warn(`Service ML injoignable (refresh) : ${detail}`);
       return { ok: false, detail };
+    }
+  }
+
+  /** Purge le cache de réponses (motif cache:*) — appelé quand les
+   * statistiques vont être recalculées. Best-effort. */
+  private async invalidateResponseCache(): Promise<void> {
+    try {
+      let cursor = '0';
+      do {
+        const [next, keys] = await this.redis.client.scan(cursor, 'MATCH', 'cache:*', 'COUNT', 200);
+        cursor = next;
+        if (keys.length) await this.redis.client.del(...keys);
+      } while (cursor !== '0');
+    } catch (err) {
+      this.logger.warn(`Invalidation du cache impossible : ${(err as Error).message}`);
+    }
+  }
+
+  /** Calcul à la volée sur une période personnalisée (plans PREMIUM+). */
+  async computeCustom(params: {
+    dateFrom?: string;
+    dateTo?: string;
+    setCode: string;
+    drawTypeCode?: string;
+    families: string[];
+  }): Promise<{ draws: number; results: Record<string, unknown> } | null> {
+    try {
+      const res = await fetch(this.url('/internal/statistics/compute'), {
+        method: 'POST',
+        headers: this.headers(),
+        body: JSON.stringify({
+          date_from: params.dateFrom,
+          date_to: params.dateTo,
+          set_code: params.setCode,
+          draw_type_code: params.drawTypeCode,
+          families: params.families,
+        }),
+      });
+      if (!res.ok) return null;
+      return (await res.json()) as { draws: number; results: Record<string, unknown> };
+    } catch (err) {
+      this.logger.warn(`Service ML injoignable (compute) : ${(err as Error).message}`);
+      return null;
     }
   }
 
