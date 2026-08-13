@@ -119,6 +119,7 @@ model DrawType {
   game        Game         @relation(fields: [gameId], references: [id])
   draws       Draw[]
   predictions Prediction[]
+  forecasts   Forecast[]
 
   @@unique([gameId, code])
   @@map("draw_types")
@@ -153,11 +154,13 @@ model Draw {
   qualityIssues DataQualityIssue[]
 
   // Références de traçabilité anti-fuite temporelle
-  numberStatSnapshots NumberStat[]    @relation("NumberStatAsOf")
-  modelTrainCutoffs   MlModel[]       @relation("ModelTrainCutoff")
-  predictionCutoffs   Prediction[]    @relation("PredictionCutoff")
-  backtestTargets     BacktestPoint[] @relation("BacktestTarget")
-  backtestCutoffs     BacktestPoint[] @relation("BacktestCutoff")
+  numberStatSnapshots NumberStat[]     @relation("NumberStatAsOf")
+  modelTrainCutoffs   MlModel[]        @relation("ModelTrainCutoff")
+  predictionCutoffs   Prediction[]     @relation("PredictionCutoff")
+  backtestTargets     BacktestPoint[]  @relation("BacktestTarget")
+  backtestCutoffs     BacktestPoint[]  @relation("BacktestCutoff")
+  forecastCutoffs     Forecast[]       @relation("ForecastCutoff")
+  forecastResults     ForecastResult[] @relation("ForecastActual")
 
   @@unique([gameId, drawTypeId, drawDate])
   @@index([gameId, drawDate(sort: Desc)])
@@ -491,6 +494,68 @@ model BacktestPoint {
 
   @@index([backtestId])
   @@map("backtest_points")
+  @@schema("ml")
+}
+
+/// Prévision TOP 5/10 de NUMÉROS pour UN tirage à venir (outil de recherche).
+/// FIGÉE : jamais supprimée ; re-génération avant tirage = supersede tracé ;
+/// après évaluation, toute modification est refusée (trigger SQL).
+model Forecast {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gameId              String    @map("game_id") @db.Uuid
+  drawTypeId          String    @map("draw_type_id") @db.Uuid
+  targetDate          DateTime  @map("target_date") @db.Date
+  datasetCutoffDrawId String    @map("dataset_cutoff_draw_id") @db.Uuid
+  modelVersions       Json      @map("model_versions") // {strategie: {poids, version}}
+  config              Json      @default("{}")
+  generatedAt         DateTime  @default(now()) @map("generated_at") @db.Timestamptz(6)
+  lockedAt            DateTime  @default(now()) @map("locked_at") @db.Timestamptz(6)
+  supersededAt        DateTime? @map("superseded_at") @db.Timestamptz(6)
+
+  drawType          DrawType         @relation(fields: [drawTypeId], references: [id])
+  datasetCutoffDraw Draw             @relation("ForecastCutoff", fields: [datasetCutoffDrawId], references: [id])
+  entries           ForecastEntry[]
+  result            ForecastResult?
+
+  // Unicité de la prévision ACTIVE par cible : index partiel SQL
+  // (WHERE superseded_at IS NULL) ajouté en migration.
+  @@index([gameId, drawTypeId, targetDate])
+  @@map("forecasts")
+  @@schema("ml")
+}
+
+model ForecastEntry {
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  forecastId     String  @map("forecast_id") @db.Uuid
+  rank           Int     @db.SmallInt // 1..10 (1..5 = TOP 5)
+  number         Int     @db.SmallInt
+  score          Decimal @db.Decimal(10, 6)
+  confidence     String // 'faible' | 'moyenne' | 'forte'
+  factors        Json // composantes dominantes {frequency, recency, gap, cooccurrence, ml}
+  consensusCount Int     @map("consensus_count") @db.SmallInt // nb de stratégies d'accord
+
+  forecast Forecast @relation(fields: [forecastId], references: [id], onDelete: Cascade)
+
+  @@unique([forecastId, rank])
+  @@map("forecast_entries")
+  @@schema("ml")
+}
+
+/// Résultat réel comparé — IMMUABLE (trigger SQL refuse UPDATE/DELETE).
+model ForecastResult {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  forecastId     String   @unique @map("forecast_id") @db.Uuid
+  actualDrawId   String   @map("actual_draw_id") @db.Uuid
+  actualNumbers  Int[]    @map("actual_numbers") @db.SmallInt
+  hitsTop5       Int      @map("hits_top5") @db.SmallInt
+  hitsTop10      Int      @map("hits_top10") @db.SmallInt
+  matchedNumbers Int[]    @map("matched_numbers") @db.SmallInt
+  evaluatedAt    DateTime @default(now()) @map("evaluated_at") @db.Timestamptz(6)
+
+  forecast   Forecast @relation(fields: [forecastId], references: [id])
+  actualDraw Draw     @relation("ForecastActual", fields: [actualDrawId], references: [id])
+
+  @@map("forecast_results")
   @@schema("ml")
 }
 

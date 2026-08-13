@@ -87,6 +87,8 @@ async function seedDataSources(): Promise<void> {
     { code: 'prediction-engine', kind: 'MANUAL', label: 'Moteur de candidates', priority: 400 },
     // Source technique : runs du moteur de backtesting (PHASE 8).
     { code: 'backtest-engine', kind: 'MANUAL', label: 'Moteur de backtesting', priority: 500 },
+    // Source technique : runs du moteur de prévisions TOP 5 (PHASE 11).
+    { code: 'forecast-engine', kind: 'MANUAL', label: 'Moteur de prévisions TOP 5', priority: 600 },
   ] as const;
   for (const s of sources) {
     await prisma.dataSource.upsert({
@@ -294,6 +296,25 @@ async function seedStrategies(): Promise<void> {
       isEnabled: true,
       minPlan: 'PRO',
       defaultConfig: { train_window: 3000 },
+    },
+    {
+      code: 'FORECAST_CONSENSUS',
+      name: 'Consensus TOP 5 (prévisions)',
+      description:
+        'Méthode de prévision par tirage : moyenne pondérée des poids de toutes les stratégies actives, réduite en TOP 10 puis TOP 5 de numéros. Validée par backtesting — jamais présentée comme une garantie.',
+      isEnabled: true,
+      minPlan: 'PRO',
+      defaultConfig: {
+        model_weights: {
+          STRATEGY_FREQUENCY: 1.5,
+          STRATEGY_COOCCURRENCE: 1.5,
+          STRATEGY_ML_GB: 1.0,
+          STRATEGY_ML_RF: 1.0,
+          STRATEGY_STATISTICAL: 1.0,
+          STRATEGY_HOT_NUMBERS: 0.7,
+          STRATEGY_RECENCY: 0.7,
+        },
+      },
     },
     {
       code: 'STRATEGY_ENSEMBLE',
