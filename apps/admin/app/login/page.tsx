@@ -46,6 +46,11 @@ export default function LoginPage() {
           className="w-full rounded-md border border-border bg-surface px-3 py-2"
           autoComplete="off"
         />
+        <p className="text-xs text-ink-3">
+          C’est la valeur de <code className="rounded bg-surface px-1">ADMIN_BOOTSTRAP_TOKEN</code>{' '}
+          dans le fichier <code className="rounded bg-surface px-1">.env</code> à la racine du
+          projet — pas un mot de passe personnel.
+        </p>
         {error ? (
           <p role="alert" className="rounded-md border border-err/40 bg-err-soft px-3 py-2 text-sm">
             {error}
