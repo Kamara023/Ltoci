@@ -27,6 +27,12 @@ export class IngestionProcessor extends WorkerHost {
     const startedAt = new Date();
     const jobKey = `${job.name}:${startedAt.toISOString().slice(0, 13)}`;
     try {
+      if (job.name === 'run-backtests') {
+        const backtest = await this.ml.runBacktests('cron');
+        await this.recordRun(job, jobKey, startedAt, backtest.ok ? 'SUCCESS' : 'FAILED',
+          backtest.ok ? null : backtest.detail);
+        return backtest;
+      }
       const result = await this.admin.triggerCollect(
         'latest',
         undefined,

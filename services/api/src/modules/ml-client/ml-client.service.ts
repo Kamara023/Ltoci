@@ -65,6 +65,25 @@ export class MlClientService {
     }
   }
 
+  /** Lance le backtest complet (toutes stratégies actives). Best-effort. */
+  async runBacktests(triggeredBy = 'api'): Promise<{ ok: boolean; detail: string }> {
+    try {
+      const res = await fetch(this.url('/internal/backtests/run'), {
+        method: 'POST',
+        headers: this.headers(),
+        body: JSON.stringify({ triggered_by: triggeredBy }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { detail?: string };
+      if (!res.ok) return { ok: false, detail: `HTTP ${res.status}: ${JSON.stringify(body)}` };
+      await this.invalidateResponseCache();
+      return { ok: true, detail: body.detail ?? 'ACCEPTED' };
+    } catch (err) {
+      const detail = (err as Error).message;
+      this.logger.warn(`Service ML injoignable (backtests) : ${detail}`);
+      return { ok: false, detail };
+    }
+  }
+
   /** Purge le cache de réponses (motif cache:*) — appelé quand les
    * statistiques vont être recalculées. Best-effort. */
   private async invalidateResponseCache(): Promise<void> {

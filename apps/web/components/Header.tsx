@@ -10,6 +10,7 @@ const LINKS = [
   { href: '/resultats', label: STR.nav.results },
   { href: '/statistiques', label: STR.nav.statistics },
   { href: '/combinaisons', label: 'Combinaisons' },
+  { href: '/backtesting', label: 'Backtesting' },
   { href: '/methodologie', label: STR.nav.methodology },
 ];
 

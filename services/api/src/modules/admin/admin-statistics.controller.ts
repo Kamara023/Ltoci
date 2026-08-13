@@ -27,4 +27,10 @@ export class AdminStatisticsController {
   generatePredictions() {
     return this.ml.generatePredictions('admin');
   }
+
+  @Post('backtests/run')
+  @ApiOperation({ summary: 'Relancer le backtest complet des stratégies (service ML)' })
+  runBacktests() {
+    return this.ml.runBacktests('admin');
+  }
 }

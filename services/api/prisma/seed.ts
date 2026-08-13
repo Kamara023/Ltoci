@@ -85,6 +85,8 @@ async function seedDataSources(): Promise<void> {
     { code: 'stats-engine', kind: 'MANUAL', label: 'Moteur de statistiques', priority: 300 },
     // Source technique : runs du moteur de combinaisons candidates (PHASE 7).
     { code: 'prediction-engine', kind: 'MANUAL', label: 'Moteur de candidates', priority: 400 },
+    // Source technique : runs du moteur de backtesting (PHASE 8).
+    { code: 'backtest-engine', kind: 'MANUAL', label: 'Moteur de backtesting', priority: 500 },
   ] as const;
   for (const s of sources) {
     await prisma.dataSource.upsert({

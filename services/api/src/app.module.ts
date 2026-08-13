@@ -7,6 +7,7 @@ import { HealthModule } from './health/health.module';
 import { JobsModule } from './jobs/jobs.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { BacktestsModule } from './modules/backtests/backtests.module';
 import { DrawsModule } from './modules/draws/draws.module';
 import { GamesModule } from './modules/games/games.module';
 import { MlClientModule } from './modules/ml-client/ml-client.module';
@@ -35,6 +36,7 @@ import { RedisModule } from './redis/redis.module';
     DrawsModule,
     StatisticsModule,
     PredictionsModule,
+    BacktestsModule,
     AdminModule,
     JobsModule,
   ],

@@ -29,7 +29,13 @@ export class IngestionScheduler implements OnApplicationBootstrap {
       { pattern: '50 23 * * *' },
       { name: 'collect-draws', data: { triggeredBy: 'cron-daily-catchup' } },
     );
-    this.logger.log('Planification de la collecte enregistrée (horaire + rattrapage quotidien)');
+    // Backtest hebdomadaire : lundi 04:00 — la preuve publique reste fraîche.
+    await this.queue.upsertJobScheduler(
+      'run-backtests-weekly',
+      { pattern: '0 4 * * 1' },
+      { name: 'run-backtests', data: { triggeredBy: 'cron-weekly' } },
+    );
+    this.logger.log('Planification enregistrée (collecte horaire + rattrapage + backtest hebdo)');
   }
 }
 
