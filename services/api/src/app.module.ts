@@ -11,6 +11,7 @@ import { DrawsModule } from './modules/draws/draws.module';
 import { GamesModule } from './modules/games/games.module';
 import { MlClientModule } from './modules/ml-client/ml-client.module';
 import { PlansModule } from './modules/plans/plans.module';
+import { PredictionsModule } from './modules/predictions/predictions.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
@@ -33,6 +34,7 @@ import { RedisModule } from './redis/redis.module';
     GamesModule,
     DrawsModule,
     StatisticsModule,
+    PredictionsModule,
     AdminModule,
     JobsModule,
   ],

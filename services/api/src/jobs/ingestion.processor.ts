@@ -32,10 +32,12 @@ export class IngestionProcessor extends WorkerHost {
         undefined,
         (job.data?.triggeredBy as string) ?? 'cron',
       );
-      // Fraîcheur des stats : recalcul best-effort après chaque collecte
-      // (la qualité est déjà enchaînée côté ingestion).
+      // Fraîcheur des stats + candidates : recalculs best-effort après chaque
+      // collecte (la qualité est déjà enchaînée côté ingestion).
       const refresh = await this.ml.refreshStatistics('cron');
       if (!refresh.ok) this.logger.warn(`Refresh stats non déclenché : ${refresh.detail}`);
+      const gen = await this.ml.generatePredictions('cron');
+      if (!gen.ok) this.logger.warn(`Génération candidates non déclenchée : ${gen.detail}`);
       await this.recordRun(job, jobKey, startedAt, 'SUCCESS', null);
       return result;
     } catch (err) {

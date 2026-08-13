@@ -47,6 +47,27 @@ describe('DrawCard', () => {
   });
 });
 
+describe('CandidateCard', () => {
+  it('affiche numéros, score et explication', async () => {
+    const { CandidateCard } = await import('@/components/CandidateCard');
+    render(
+      <CandidateCard
+        candidate={{
+          rank: 1,
+          numbers: [4, 17, 33, 58, 89],
+          score: 2.41,
+          breakdown: { weighted: { frequency: 0.9, recency: 0.5 } },
+          explanation: 'Rappel : chaque tirage est indépendant.',
+        }}
+      />,
+    );
+    expect(screen.getByText('89')).toBeInTheDocument();
+    expect(screen.getByText(/score 2\.41/)).toBeInTheDocument();
+    expect(screen.getByText(/indépendant/)).toBeInTheDocument();
+    expect(screen.getByText('Fréquence')).toBeInTheDocument();
+  });
+});
+
 describe('StatTile', () => {
   it('affiche libellé, valeur et détail', () => {
     render(<StatTile label="Historique" value="15 000+" detail="tirages" />);

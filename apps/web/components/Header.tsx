@@ -9,6 +9,7 @@ const LINKS = [
   { href: '/', label: STR.nav.home },
   { href: '/resultats', label: STR.nav.results },
   { href: '/statistiques', label: STR.nav.statistics },
+  { href: '/combinaisons', label: 'Combinaisons' },
   { href: '/methodologie', label: STR.nav.methodology },
 ];
 

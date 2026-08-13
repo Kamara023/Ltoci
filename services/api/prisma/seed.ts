@@ -83,6 +83,8 @@ async function seedDataSources(): Promise<void> {
     { code: 'quality-engine', kind: 'MANUAL', label: 'Moteur de contrôle qualité', priority: 200 },
     // Source technique : runs du moteur de statistiques (PHASE 4).
     { code: 'stats-engine', kind: 'MANUAL', label: 'Moteur de statistiques', priority: 300 },
+    // Source technique : runs du moteur de combinaisons candidates (PHASE 7).
+    { code: 'prediction-engine', kind: 'MANUAL', label: 'Moteur de candidates', priority: 400 },
   ] as const;
   for (const s of sources) {
     await prisma.dataSource.upsert({
@@ -213,7 +215,7 @@ async function seedStrategies(): Promise<void> {
       code: 'STRATEGY_HOT_NUMBERS',
       name: 'Numéros chauds',
       description: 'Fréquence sur fenêtre courte. Descriptif, non prédictif.',
-      isEnabled: false,
+      isEnabled: true,
       minPlan: 'PREMIUM',
       defaultConfig: { window: 'LAST_20' },
     },
@@ -222,7 +224,7 @@ async function seedStrategies(): Promise<void> {
       name: 'Numéros froids',
       description:
         "Numéros les moins fréquents. Documenté comme non prédictif : un numéro « en retard » n'est pas « dû » (sophisme du joueur).",
-      isEnabled: false,
+      isEnabled: true,
       minPlan: 'PREMIUM',
       defaultConfig: { window: 'LAST_50' },
     },
@@ -230,7 +232,7 @@ async function seedStrategies(): Promise<void> {
       code: 'STRATEGY_RECENCY',
       name: 'Récence pondérée',
       description: 'Fréquence pondérée par décroissance exponentielle.',
-      isEnabled: false,
+      isEnabled: true,
       minPlan: 'PREMIUM',
       defaultConfig: { lambda: 0.05 },
     },
@@ -238,21 +240,21 @@ async function seedStrategies(): Promise<void> {
       code: 'STRATEGY_BALANCED',
       name: 'Équilibrée',
       description: 'Contraintes de forme : pair/impair, haut/bas, somme dans la plage historique centrale.',
-      isEnabled: false,
+      isEnabled: true,
       minPlan: 'PREMIUM',
     },
     {
       code: 'STRATEGY_COOCCURRENCE',
       name: 'Cooccurrences',
       description: 'Score basé sur le lift des paires fréquentes.',
-      isEnabled: false,
+      isEnabled: true,
       minPlan: 'PREMIUM',
     },
     {
       code: 'STRATEGY_STATISTICAL',
       name: 'Score composite',
       description: 'Combinaison pondérée fréquence + retard + cooccurrence.',
-      isEnabled: false,
+      isEnabled: true,
       minPlan: 'PREMIUM',
       defaultConfig: {
         weights: {
