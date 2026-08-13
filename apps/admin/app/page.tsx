@@ -14,6 +14,12 @@ interface StatsStatus {
   computed_at?: string;
   counts?: Record<string, number>;
 }
+interface ForecastsStatus {
+  available: boolean;
+  active_forecasts?: number;
+  evaluated?: number;
+  generated_at?: string | null;
+}
 interface Run {
   id: string;
   status: string;
@@ -56,6 +62,10 @@ export default function DashboardPage() {
   const runs = useQuery<{ data: Run[] }>({
     queryKey: ['runs-latest'],
     queryFn: () => adminFetch('/admin/ingestion/runs?limit=8'),
+  });
+  const forecasts = useQuery<ForecastsStatus>({
+    queryKey: ['forecasts-status'],
+    queryFn: () => adminFetch('/admin/forecasts/status'),
   });
 
   const draws = summary.data?.draws ?? {};
@@ -113,6 +123,18 @@ export default function DashboardPage() {
           </p>
           <p className="text-xs text-ink-2">stats numéros</p>
         </div>
+        <div className="rounded-lg border border-border bg-surface-2 p-4">
+          <p className="text-xs uppercase text-ink-3">Prévisions TOP 5</p>
+          <p className="text-2xl font-bold tabular-nums">
+            {(forecasts.data?.active_forecasts ?? 0).toLocaleString('fr-FR')}
+          </p>
+          <p className="text-xs text-ink-2">
+            actives · {forecasts.data?.evaluated ?? 0} évaluées
+            {forecasts.data?.generated_at
+              ? ` · génération ${new Date(forecasts.data.generated_at).toLocaleString('fr-FR')}`
+              : ''}
+          </p>
+        </div>
       </section>
 
       <section className="rounded-lg border border-border bg-surface-2 p-4">
@@ -122,6 +144,8 @@ export default function DashboardPage() {
           <ActionButton label="Recalculer les stats" path="/admin/statistics/refresh" invalidate={['stats-status']} />
           <ActionButton label="Régénérer les candidates" path="/admin/predictions/generate" invalidate={[]} />
           <ActionButton label="Relancer les backtests" path="/admin/backtests/run" invalidate={[]} />
+          <ActionButton label="Générer les prévisions TOP 5" path="/admin/forecasts/generate" invalidate={['forecasts-status']} />
+          <ActionButton label="Évaluer les prévisions" path="/admin/forecasts/evaluate" invalidate={['forecasts-status']} />
         </div>
       </section>
 
