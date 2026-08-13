@@ -33,6 +33,12 @@ log = structlog.get_logger()
 BACKTEST_SOURCE = "backtest-engine"
 THEORY_AVG = 5 * 5 / 90  # ≈ 0,2778 correspondances attendues par pas
 POINT_BATCH = 5000
+ML_CODES = {"STRATEGY_ML_RF", "STRATEGY_ML_GB"}
+# Ré-entraînement périodique des modèles ML pendant le walk-forward :
+# à chaque ré-entraînement, seul l'historique ANTÉRIEUR au pas courant est
+# utilisé (inputs.history) — entre deux, le modèle est simplement « figé »,
+# ce qui reste strictement sans fuite.
+ML_RETRAIN_EVERY = 250
 
 
 def run_backtest(
@@ -97,6 +103,8 @@ def _run(strategy_codes: list[str] | None, min_history: int, runlog: RunLogger) 
     matches_by_code: dict[str, list[int]] = {code: [] for code in codes}
     points_by_code: dict[str, list[dict]] = {code: [] for code in codes}
     lo = inputs.number_min
+    ml_models: dict[str, object] = {}
+    ml_last_train: dict[str, int] = {}
 
     runlog.event("INFO", f"Walk-forward : {total - min_history} pas × {len(codes)} stratégies")
 
@@ -111,6 +119,19 @@ def _run(strategy_codes: list[str] | None, min_history: int, runlog: RunLogger) 
                     )
                     .tolist()
                 )
+            elif code in ML_CODES:
+                if code not in ml_models or t - ml_last_train[code] >= ML_RETRAIN_EVERY:
+                    from app.mlmodels.trainer import train_model
+
+                    ml_models[code] = train_model(
+                        code, inputs.history, lo, inputs.number_max, train_window=3000
+                    )
+                    ml_last_train[code] = t
+                from app.mlmodels.trainer import predict_weights
+
+                w = predict_weights(ml_models[code], inputs)[lo:]
+                order = np.argsort(-w, kind="stable")[:5]
+                predicted = sorted(int(i) + lo for i in order)
             else:
                 spec = build_spec(code, inputs)
                 w = spec.weights[lo:]
@@ -170,7 +191,15 @@ def _run(strategy_codes: list[str] | None, min_history: int, runlog: RunLogger) 
                     game_id=config.game_id,
                     draw_type_id=None,
                     strategy_id=enabled[code],
-                    config={"min_history": min_history, "evaluation": "top5-weights"},
+                    config={
+                        "min_history": min_history,
+                        "evaluation": "top5-weights",
+                        **(
+                            {"ml_retrain_every": ML_RETRAIN_EVERY, "train_window": 3000}
+                            if code in ML_CODES
+                            else {}
+                        ),
+                    },
                     from_draw_date=from_date,
                     to_draw_date=to_date,
                     status="SUCCESS",

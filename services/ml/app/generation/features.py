@@ -23,6 +23,9 @@ class StrategyInputs:
     recency: np.ndarray         # somme pondérée exp(-λ·ancienneté)
     current_gap: np.ndarray     # retard actuel (nb de tirages)
     pair_counts: np.ndarray     # matrice symétrique des cooccurrences
+    # Séquence brute des tirages (ordre chronologique) — requise par les
+    # stratégies ML pour construire leurs jeux d'entraînement (labels).
+    history: list[list[int]] | None = None
 
     def norm(self, arr: np.ndarray) -> np.ndarray:
         m = arr.max()
@@ -69,4 +72,5 @@ def build_inputs(
         recency=recency,
         current_gap=current_gap,
         pair_counts=pair_counts,
+        history=[sorted(set(ns)) for ns in numbers_col],
     )

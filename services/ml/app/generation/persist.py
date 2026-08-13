@@ -8,6 +8,7 @@ dernier état des données (dataset_cutoff_draw_id trace ce qui était connu).
 from __future__ import annotations
 
 import datetime as dt
+from pathlib import Path
 
 import structlog
 from sqlalchemy import delete, insert, select
@@ -23,6 +24,51 @@ from app.statistics.loader import load_config, load_valid_draws
 log = structlog.get_logger()
 
 PREDICTION_SOURCE = "prediction-engine"
+ARTIFACTS_DIR = Path(__file__).resolve().parents[2] / "artifacts"
+
+
+def _register_model(
+    conn, strategy_id: str, code: str, cutoff_draw_id: str, model_info: dict
+) -> str:
+    """Registre ml.models : une version par (stratégie, cutoff). L'artefact
+    joblib est stocké hors git (services/ml/artifacts/, gitignoré)."""
+    models_t = table("ml", "models")
+    version = cutoff_draw_id[:13]
+    existing = conn.execute(
+        select(models_t.c.id).where(
+            (models_t.c.name == code) & (models_t.c.version == version)
+        )
+    ).scalar()
+    if existing:
+        return str(existing)
+
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    artifact_path = ARTIFACTS_DIR / f"{code.lower()}-{version}.joblib"
+    try:
+        import joblib
+
+        joblib.dump(model_info["model"], artifact_path)
+    except Exception as exc:  # noqa: BLE001 — l'artefact est un confort, pas un invariant
+        log.warn("artifact_save_failed", error=str(exc))
+        artifact_path = None
+
+    return str(
+        conn.execute(
+            insert(models_t)
+            .values(
+                strategy_id=strategy_id,
+                name=code,
+                version=version,
+                algo=model_info["algo"],
+                params=model_info["params"],
+                trained_on_draws=model_info["trained_on_draws"],
+                train_cutoff_draw_id=cutoff_draw_id,
+                artifact_path=str(artifact_path) if artifact_path else None,
+                metrics=model_info["metrics"],
+            )
+            .returning(models_t.c.id)
+        ).scalar_one()
+    )
 
 
 def generate_and_store(
@@ -100,6 +146,12 @@ def _run(
             ).scalars().all()
             if existing:
                 conn.execute(delete(predictions_t).where(predictions_t.c.id.in_(existing)))
+            model_id = (
+                _register_model(conn, strat["id"], strat["code"], data.last_draw_id,
+                                spec.model_info)
+                if spec.model_info
+                else None
+            )
             prediction_id = conn.execute(
                 insert(predictions_t)
                 .values(
@@ -107,6 +159,7 @@ def _run(
                     draw_type_id=None,
                     target_draw_date=target,
                     strategy_id=strat["id"],
+                    model_id=model_id,
                     config_used={
                         "pool_size": pool_size,
                         "top_n": top_n,

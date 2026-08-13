@@ -22,6 +22,10 @@ def make_seq(rows: list[list[int]]) -> pd.DataFrame:
     )
 
 
+# Stratégies interprétables (les stratégies ML, qui exigent un historique
+# d'entraînement, sont testées séparément dans test_mlmodels.py).
+INTERPRETABLE = sorted(c for c in REGISTRY if not c.startswith("STRATEGY_ML"))
+
 SEQ = make_seq(
     [
         [1, 2, 3, 4, 5],
@@ -49,7 +53,7 @@ def test_features_calculees_a_la_main():
 
 
 def test_toutes_les_strategies_generent_des_candidates_valides():
-    for code in REGISTRY:
+    for code in INTERPRETABLE:
         spec = build_spec(code, INPUTS)
         rng = make_rng(code, "cutoff-test")
         candidates = generate(spec, INPUTS, rng, pool_size=800, top_n=10)
@@ -134,7 +138,7 @@ def test_random_approximativement_uniforme():
 
 
 def test_explications_conformes_et_sans_interdits():
-    for code in REGISTRY:
+    for code in INTERPRETABLE:
         spec = build_spec(code, INPUTS)
         candidates = generate(spec, INPUTS, make_rng(code, "expl"), pool_size=300, top_n=3)
         for cand in candidates:

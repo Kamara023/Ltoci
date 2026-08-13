@@ -33,6 +33,9 @@ class StrategySpec:
     constraints: dict = field(default_factory=dict)
     # {'sum_range': (lo, hi), 'max_consecutive': n, 'odd_range': (lo, hi),
     #  'high_range': (lo, hi)}
+    # Renseigné par les stratégies ML : {algo, params, metrics, trained_on_draws,
+    #  model} — persisté dans ml.models par la couche de persistance.
+    model_info: dict | None = None
 
 
 @dataclass

@@ -126,6 +126,49 @@ def statistical_strategy(inputs: StrategyInputs, _config: dict) -> StrategySpec:
     )
 
 
+@_register("STRATEGY_ML_RF")
+def ml_rf_strategy(inputs: StrategyInputs, config: dict) -> StrategySpec:
+    return _ml_strategy("STRATEGY_ML_RF", inputs, config)
+
+
+@_register("STRATEGY_ML_GB")
+def ml_gb_strategy(inputs: StrategyInputs, config: dict) -> StrategySpec:
+    return _ml_strategy("STRATEGY_ML_GB", inputs, config)
+
+
+def _ml_strategy(code: str, inputs: StrategyInputs, config: dict) -> StrategySpec:
+    """Modèles EXPÉRIMENTAUX (classification « le numéro sort au prochain
+    tirage »). Entraînés sur l'historique STRICTEMENT antérieur porté par
+    `inputs.history` ; les probabilités prédites servent de poids.
+    Attendu scientifique sur un tirage équitable : ne bat pas durablement
+    la baseline aléatoire — vérifié publiquement par backtesting."""
+    if not inputs.history or len(inputs.history) < 300:
+        raise ValueError(f"{code}: historique insuffisant pour entraîner un modèle")
+    from app.mlmodels.trainer import predict_weights, train_model
+
+    train_window = int(config.get("train_window", 3000))
+    trained = train_model(
+        code,
+        inputs.history,
+        inputs.number_min,
+        inputs.number_max,
+        train_window=train_window,
+    )
+    weights = predict_weights(trained, inputs)
+    return StrategySpec(
+        code=code,
+        weights=weights,
+        profile=_profile(frequency=0.5, recency=0.5, cooccurrence=0.3),
+        model_info={
+            "algo": trained.algo,
+            "params": {"train_window": trained.train_window},
+            "metrics": trained.metrics,
+            "trained_on_draws": trained.n_samples,
+            "model": trained.model,
+        },
+    )
+
+
 def build_spec(code: str, inputs: StrategyInputs, config: dict | None = None) -> StrategySpec:
     if code not in REGISTRY:
         raise KeyError(f"Stratégie inconnue ou non implémentée : {code}")

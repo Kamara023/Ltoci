@@ -283,15 +283,17 @@ async function seedStrategies(): Promise<void> {
       name: 'Random Forest (expérimental)',
       description:
         'Modèle expérimental et pédagogique. Attendu scientifique : ne bat pas durablement la baseline aléatoire sur un tirage équitable.',
-      isEnabled: false,
+      isEnabled: true,
       minPlan: 'PRO',
+      defaultConfig: { train_window: 3000 },
     },
     {
       code: 'STRATEGY_ML_GB',
       name: 'Gradient Boosting (expérimental)',
       description: 'Modèle expérimental, comparé à la baseline aléatoire.',
-      isEnabled: false,
+      isEnabled: true,
       minPlan: 'PRO',
+      defaultConfig: { train_window: 3000 },
     },
     {
       code: 'STRATEGY_ENSEMBLE',

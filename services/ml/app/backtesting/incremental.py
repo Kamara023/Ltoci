@@ -36,6 +36,7 @@ class IncrementalInputs(StrategyInputs):
             recency=np.zeros(size),
             current_gap=np.zeros(size),
             pair_counts=np.zeros((size, size)),
+            history=[],
         )
         self._recent = deque()
         self._recent_window = recent_window
@@ -56,6 +57,9 @@ class IncrementalInputs(StrategyInputs):
         for a, b in combinations(uniq, 2):
             self.pair_counts[a, b] += 1
             self.pair_counts[b, a] += 1
+        # Historique brut (pour l'entraînement des stratégies ML).
+        assert self.history is not None
+        self.history.append(uniq)
         # Fenêtre glissante des 20 derniers tirages.
         self._recent.append(uniq)
         for n in uniq:
