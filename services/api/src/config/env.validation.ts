@@ -17,6 +17,8 @@ export const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(16),
   // Token d'amorçage du backoffice — REMPLACÉ par JWT/RBAC en PHASE 5.
   ADMIN_BOOTSTRAP_TOKEN: z.string().min(12),
+  // Origines autorisées pour les appels navigateur (séparées par virgules).
+  CORS_ORIGINS: z.string().default('http://localhost:3002'),
 });
 
 export type Env = z.infer<typeof envSchema>;

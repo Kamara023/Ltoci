@@ -8,6 +8,17 @@ import { requestIdMiddleware } from './common/request-id.middleware';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api/v1');
+  // CORS : liste blanche d'origines (le front navigateur appelle l'API
+  // cross-origin ; les pages server-rendered n'y sont pas soumises).
+  app.enableCors({
+    origin: (process.env.CORS_ORIGINS ?? 'http://localhost:3002')
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean),
+    allowedHeaders: ['Authorization', 'Content-Type', 'X-Admin-Token', 'X-Request-Id'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    maxAge: 86400,
+  });
   app.use(requestIdMiddleware);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalFilters(new HttpErrorFilter());
