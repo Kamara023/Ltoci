@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { QueryError } from '@/components/QueryError';
 import { adminFetch } from '@/lib/adminApi';
 
 interface Summary {
@@ -59,10 +60,24 @@ export default function DashboardPage() {
 
   const draws = summary.data?.draws ?? {};
   const total = Object.values(draws).reduce((a, b) => a + b, 0);
+  const loading = summary.isLoading || stats.isLoading || runs.isLoading;
+  const firstError = summary.error ?? stats.error ?? runs.error;
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Tableau de bord</h1>
+
+      {firstError ? (
+        <QueryError
+          error={firstError}
+          onRetry={() => {
+            summary.refetch();
+            stats.refetch();
+            runs.refetch();
+          }}
+        />
+      ) : null}
+      {loading ? <p className="text-sm text-ink-3">Chargement des indicateurs…</p> : null}
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border border-border bg-surface-2 p-4">

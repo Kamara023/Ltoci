@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { QueryError } from '@/components/QueryError';
 import { adminFetch } from '@/lib/adminApi';
 
 interface Strategy {
@@ -97,6 +98,7 @@ export default function StrategiesPage() {
         Les coefficients s’appliquent à la prochaine génération, sans déploiement. Le plan minimum
         contrôle le gating côté API.
       </p>
+      {query.error ? <QueryError error={query.error} onRetry={() => query.refetch()} /> : null}
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead>

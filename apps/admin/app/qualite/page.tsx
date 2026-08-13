@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { QueryError } from '@/components/QueryError';
 import { adminFetch } from '@/lib/adminApi';
 
 interface Issue {
@@ -62,6 +63,8 @@ export default function QualityPage() {
           {runQuality.isPending ? '…' : 'Relancer le contrôle (pending)'}
         </button>
       </div>
+
+      {issues.error ? <QueryError error={issues.error} onRetry={() => issues.refetch()} /> : null}
 
       <div className="flex flex-wrap items-center gap-4 text-sm">
         <label className="flex items-center gap-2">

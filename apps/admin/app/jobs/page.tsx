@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { QueryError } from '@/components/QueryError';
 import { adminFetch } from '@/lib/adminApi';
 
 interface JobRun {
@@ -26,6 +27,7 @@ export default function JobsPage() {
       <p className="text-sm text-ink-2">
         Collecte horaire (:20), rattrapage quotidien (23:50), backtest hebdomadaire (lundi 04:00).
       </p>
+      {jobs.error ? <QueryError error={jobs.error} onRetry={() => jobs.refetch()} /> : null}
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead>

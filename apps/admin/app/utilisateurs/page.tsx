@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { QueryError } from '@/components/QueryError';
 import { adminFetch } from '@/lib/adminApi';
 
 interface AdminUser {
@@ -33,6 +34,7 @@ export default function UsersPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Utilisateurs</h1>
+      {users.error ? <QueryError error={users.error} onRetry={() => users.refetch()} /> : null}
       <div className="flex items-center gap-3 text-sm">
         <input
           value={search}

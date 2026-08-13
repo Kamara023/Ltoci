@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
+import { QueryError } from '@/components/QueryError';
 import { adminFetch } from '@/lib/adminApi';
 
 interface Run {
@@ -66,6 +67,8 @@ export default function IngestionPage() {
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-bold">Ingestion</h1>
+
+      {runs.error ? <QueryError error={runs.error} onRetry={() => runs.refetch()} /> : null}
 
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-border bg-surface-2 p-4">
