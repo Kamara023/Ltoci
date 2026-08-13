@@ -65,6 +65,26 @@ describe('Auth (e2e)', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
     expect(me.body.email).toBe(email);
+    expect(me.body.plan).toBe('FREE'); // nouveau compte : plan effectif FREE
+  });
+
+  it('/me reflète la souscription active (PRO)', async () => {
+    const user = await prisma.user.findUnique({ where: { email } });
+    await prisma.subscription.create({
+      data: { userId: user!.id, planCode: 'PRO', status: 'ACTIVE', startedAt: new Date() },
+    });
+    // Purge du cache entitlements (TTL 60 s) pour une résolution fraîche.
+    const { RedisService } = await import('../src/redis/redis.service');
+    await app.get(RedisService).client.del(`entitlements:${user!.id}`);
+
+    const me = await request(app.getHttpServer())
+      .get('/api/v1/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(me.body.plan).toBe('PRO');
+
+    await prisma.subscription.deleteMany({ where: { userId: user!.id } });
+    await app.get(RedisService).client.del(`entitlements:${user!.id}`);
   });
 
   it('refresh : rotation — l’ancien token est consommé', async () => {

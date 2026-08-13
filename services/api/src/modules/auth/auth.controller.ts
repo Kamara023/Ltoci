@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Ip, Patch, Post, UseGuards, Headers } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EntitlementsService } from '../plans/entitlements.service';
 import { AuthService } from './auth.service';
 import { LoginDto, RefreshDto, RegisterDto, UpdateMeDto } from './dto/auth.dto';
 import { AuthUser, CurrentUser, JwtAuthGuard } from './jwt-auth.guard';
@@ -11,6 +12,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly prisma: PrismaService,
+    private readonly entitlements: EntitlementsService,
   ) {}
 
   @Post('auth/register')
@@ -48,13 +50,16 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Profil de l’utilisateur connecté' })
+  @ApiOperation({ summary: 'Profil de l’utilisateur connecté (avec plan effectif)' })
   async me(@CurrentUser() user: AuthUser) {
     const full = await this.prisma.user.findUnique({
       where: { id: user!.id },
       select: { id: true, email: true, displayName: true, role: true, createdAt: true },
     });
-    return full;
+    // Plan effectif résolu comme partout ailleurs (souscription ACTIVE sinon
+    // FREE) — le front n'a JAMAIS à le deviner.
+    const ent = await this.entitlements.forUser(user!.id);
+    return { ...full, plan: ent.plan };
   }
 
   @Patch('me')

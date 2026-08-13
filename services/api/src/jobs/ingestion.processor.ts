@@ -33,24 +33,32 @@ export class IngestionProcessor extends WorkerHost {
           backtest.ok ? null : backtest.detail);
         return backtest;
       }
-      const result = await this.admin.triggerCollect(
-        'latest',
-        undefined,
-        (job.data?.triggeredBy as string) ?? 'cron',
-      );
-      // Fraîcheur des stats + candidates : recalculs best-effort après chaque
-      // collecte (la qualité est déjà enchaînée côté ingestion).
-      const refresh = await this.ml.refreshStatistics('cron');
-      if (!refresh.ok) this.logger.warn(`Refresh stats non déclenché : ${refresh.detail}`);
-      const gen = await this.ml.generatePredictions('cron');
-      if (!gen.ok) this.logger.warn(`Génération candidates non déclenchée : ${gen.detail}`);
-      // Prévisions TOP 5 : ÉVALUER d'abord (comparer les prévisions figées
-      // aux tirages qui viennent d'arriver), puis régénérer pour les
-      // prochaines cibles. Best-effort comme le reste de la chaîne.
-      const evaluation = await this.ml.evaluateForecasts('cron');
-      if (!evaluation.ok) this.logger.warn(`Évaluation prévisions non faite : ${evaluation.detail}`);
-      const forecasts = await this.ml.generateForecasts('cron');
-      if (!forecasts.ok) this.logger.warn(`Génération prévisions non déclenchée : ${forecasts.detail}`);
+      const triggeredBy = (job.data?.triggeredBy as string) ?? 'cron';
+      const result = await this.admin.triggerCollect('latest', undefined, triggeredBy);
+
+      // La chaîne lourde (stats/ML) ne tourne que si la collecte a réellement
+      // apporté du nouveau — sauf pour le rattrapage quotidien (chaîne forcée,
+      // filet de sécurité). La qualité est déjà enchaînée côté ingestion.
+      const collectStats = (result as { stats?: { inserted?: number; updated?: number } }).stats;
+      const newDraws = (collectStats?.inserted ?? 0) + (collectStats?.updated ?? 0);
+      const mustChain = newDraws > 0 || triggeredBy === 'cron-daily-catchup';
+      if (mustChain) {
+        const refresh = await this.ml.refreshStatistics('cron');
+        if (!refresh.ok) this.logger.warn(`Refresh stats non déclenché : ${refresh.detail}`);
+        const gen = await this.ml.generatePredictions('cron');
+        if (!gen.ok) this.logger.warn(`Génération candidates non déclenchée : ${gen.detail}`);
+        // Prévisions TOP 5 : ÉVALUER d'abord (comparer les prévisions figées
+        // aux tirages qui viennent d'arriver), puis régénérer les prochaines
+        // cibles. Best-effort comme le reste de la chaîne.
+        const evaluation = await this.ml.evaluateForecasts('cron');
+        if (!evaluation.ok)
+          this.logger.warn(`Évaluation prévisions non faite : ${evaluation.detail}`);
+        const forecasts = await this.ml.generateForecasts('cron');
+        if (!forecasts.ok)
+          this.logger.warn(`Génération prévisions non déclenchée : ${forecasts.detail}`);
+      } else {
+        this.logger.log('Collecte sans nouveauté — chaîne stats/ML non déclenchée');
+      }
       await this.recordRun(job, jobKey, startedAt, 'SUCCESS', null);
       return result;
     } catch (err) {

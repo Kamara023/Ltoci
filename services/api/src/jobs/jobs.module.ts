@@ -8,9 +8,11 @@ import { INGESTION_QUEUE } from './jobs.constants';
 
 /**
  * Planification de la collecte :
- * - toutes les heures à :20 — les tirages ont des horaires fixes et l'upsert
- *   est idempotent, donc une collecte fréquente est sûre et bon marché ;
- * - rattrapage quotidien à 23:50 (même collecte, filet de sécurité).
+ * - toutes les 15 minutes — la source publie avec son propre délai ; l'upsert
+ *   est idempotent et la requête est légère (1 JSON mensuel). La chaîne lourde
+ *   (stats/ML) n'est déclenchée par le processor QUE si la collecte a apporté
+ *   de nouveaux tirages ;
+ * - rattrapage quotidien à 23:50 (même collecte, chaîne forcée, filet de sécurité).
  */
 @Injectable()
 export class IngestionScheduler implements OnApplicationBootstrap {
@@ -21,8 +23,8 @@ export class IngestionScheduler implements OnApplicationBootstrap {
   async onApplicationBootstrap(): Promise<void> {
     await this.queue.upsertJobScheduler(
       'collect-draws-hourly',
-      { pattern: '20 * * * *' },
-      { name: 'collect-draws', data: { triggeredBy: 'cron-hourly' } },
+      { pattern: '*/15 * * * *' },
+      { name: 'collect-draws', data: { triggeredBy: 'cron-15min' } },
     );
     await this.queue.upsertJobScheduler(
       'collect-draws-daily-catchup',
@@ -35,7 +37,9 @@ export class IngestionScheduler implements OnApplicationBootstrap {
       { pattern: '0 4 * * 1' },
       { name: 'run-backtests', data: { triggeredBy: 'cron-weekly' } },
     );
-    this.logger.log('Planification enregistrée (collecte horaire + rattrapage + backtest hebdo)');
+    this.logger.log(
+      'Planification enregistrée (collecte */15 min + rattrapage 23:50 + backtest hebdo)',
+    );
   }
 }
 

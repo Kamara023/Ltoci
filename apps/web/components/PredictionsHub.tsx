@@ -7,6 +7,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { STR } from '@/lib/strings';
@@ -60,7 +61,11 @@ export function PredictionsHub() {
   });
 
   const visible = new Set(list.data?.data.map((p) => p.strategy.code) ?? []);
-  const enabled = (strategies.data?.data ?? []).filter((s) => s.isEnabled);
+  // FORECAST_CONSENSUS est une méthode de PRÉVISION par numéros (page
+  // /previsions) : elle ne génère jamais de combinaisons, donc pas d'onglet ici.
+  const enabled = (strategies.data?.data ?? []).filter(
+    (s) => s.isEnabled && s.code !== 'FORECAST_CONSENSUS',
+  );
 
   return (
     <div className="space-y-5">
@@ -71,6 +76,15 @@ export function PredictionsHub() {
         par backtesting — en toute transparence.
       </p>
       <DisclaimerBanner />
+
+      <p className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-ink-2">
+        Vous cherchez le <strong>TOP 5 de numéros par tirage</strong> (consensus des stratégies) ?
+        Il a sa propre page :{' '}
+        <Link href="/previsions" className="font-semibold text-accent hover:underline">
+          Prévisions
+        </Link>
+        .
+      </p>
 
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Stratégies">
         {enabled.map((s) => {
