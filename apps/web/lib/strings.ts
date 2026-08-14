@@ -24,7 +24,11 @@ export const STR = {
     LAST_20: '20 derniers',
     LAST_10: '10 derniers',
   } as Record<string, string>,
-  sets: { WINNING: 'Numéros gagnants', MACHINE: 'Numéros machine' } as Record<string, string>,
+  // Les tableaux de numéros portent l'ordre de sortie publié par la source.
+  sets: { WINNING: 'Gagnants (ordre de sortie)', MACHINE: 'Machine (ordre de sortie)' } as Record<
+    string,
+    string
+  >,
   dataUnavailable: 'Données momentanément indisponibles — réessayez dans un instant.',
   upsell: {
     title: 'Fonctionnalité Premium',

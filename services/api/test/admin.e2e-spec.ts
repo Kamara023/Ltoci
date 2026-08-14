@@ -40,7 +40,7 @@ describe('Admin (e2e)', () => {
       .expect(401);
   });
 
-  it('crée un tirage par saisie manuelle, trié par le trigger, avec audit', async () => {
+  it('crée un tirage par saisie manuelle, ordre préservé, avec audit', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/admin/draws')
       .set('X-Admin-Token', token)
@@ -54,8 +54,9 @@ describe('Admin (e2e)', () => {
 
     expect(res.body.status).toBe('PENDING_REVIEW');
     const sets = res.body.numberSets.map((s: { numbers: number[] }) => s.numbers);
-    expect(sets).toContainEqual([4, 17, 33, 58, 89]); // tri automatique
-    expect(sets).toContainEqual([1, 2, 3, 4, 5]);
+    // Ordre de saisie PRÉSERVÉ (ordre de sortie — migration preserve_draw_order).
+    expect(sets).toContainEqual([89, 4, 58, 17, 33]);
+    expect(sets).toContainEqual([5, 4, 3, 2, 1]);
 
     const audit = await prisma.auditLog.findFirst({
       where: { action: 'draw.manual_create', entityId: res.body.id },

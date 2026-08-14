@@ -38,6 +38,12 @@ export default function AccountPage() {
     queryKey: ['me'],
     queryFn: () => authFetch('/me'),
     enabled: Boolean(ready && user),
+    // Le plan doit TOUJOURS être relu à l'ouverture de la page (jamais servi
+    // depuis un cache client) : un changement de souscription est visible
+    // immédiatement après un simple rechargement.
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   if (!ready || !user) return <p className="py-8 text-center text-ink-2">Chargement…</p>;

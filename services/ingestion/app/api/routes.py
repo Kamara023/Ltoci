@@ -77,7 +77,7 @@ def _collect_latest(triggered_by: str) -> dict:
 def _run_backfill(months: list[str] | None, triggered_by: str) -> None:
     runlog = RunLogger(LONACI_SOURCE, triggered_by)
     totals = {"found": 0, "inserted": 0, "updated": 0, "duplicates": 0, "conflicts": 0,
-              "invalid": 0, "months_ok": 0, "months_failed": 0}
+              "invalid": 0, "reordered": 0, "months_ok": 0, "months_failed": 0}
     try:
         if months is None:
             months = collector.list_available_months()
@@ -93,7 +93,9 @@ def _run_backfill(months: list[str] | None, triggered_by: str) -> None:
                 runlog.event("WARN", warning)
             stats = writer.write(parsed.draws)
             totals["months_ok"] += 1
-            for key in ("found", "inserted", "updated", "duplicates", "conflicts", "invalid"):
+            for key in (
+                "found", "inserted", "updated", "duplicates", "conflicts", "invalid", "reordered"
+            ):
                 totals[key] += getattr(stats, key)
             runlog.event("INFO", f"Mois {month_year} : {stats.as_dict()}")
 

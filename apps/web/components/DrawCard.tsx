@@ -18,10 +18,16 @@ export function DrawCard({ draw, href }: { draw: DrawDto; href?: string }) {
           })}
         </time>
       </header>
+      {/* Les numéros sont affichés dans l'ORDRE DE SORTIE publié par la LONACI. */}
       {(['WINNING', 'MACHINE'] as const).map((set) =>
         draw.numbers[set] ? (
           <div key={set} className="mb-2 flex items-center gap-2">
-            <span className="w-20 shrink-0 text-xs text-ink-3">{STR.sets[set]}</span>
+            <span
+              className="w-28 shrink-0 text-xs text-ink-3"
+              title="Numéros dans l'ordre de sortie publié"
+            >
+              {STR.sets[set]}
+            </span>
             <div className="flex flex-wrap gap-1.5">
               {draw.numbers[set].map((n) => (
                 <NumberBall key={n} number={n} size="sm" variant={set === 'WINNING' ? 'default' : 'cold'} />

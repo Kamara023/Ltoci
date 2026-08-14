@@ -42,8 +42,8 @@ describe('DrawCard', () => {
     );
     expect(screen.getByText('Reveil')).toBeInTheDocument();
     expect(screen.getByText('89')).toBeInTheDocument();
-    expect(screen.getByText('Numéros gagnants')).toBeInTheDocument();
-    expect(screen.getByText('Numéros machine')).toBeInTheDocument();
+    expect(screen.getByText('Gagnants (ordre de sortie)')).toBeInTheDocument();
+    expect(screen.getByText('Machine (ordre de sortie)')).toBeInTheDocument();
   });
 });
 

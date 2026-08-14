@@ -106,14 +106,19 @@ CREATE TABLE core.draw_number_sets (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     draw_id         uuid NOT NULL REFERENCES core.draws(id) ON DELETE CASCADE,
     set_type_id     uuid NOT NULL REFERENCES core.game_number_set_types(id),
-    numbers         smallint[] NOT NULL,           -- trié croissant, ex {4,17,33,58,89}
+    numbers         smallint[] NOT NULL,           -- ORDRE DE SORTIE publié, ex {89,4,58,17,33}
     UNIQUE (draw_id, set_type_id)
 );
 CREATE INDEX idx_dns_numbers ON core.draw_number_sets USING gin (numbers);
 -- Contrainte d'intégrité (trigger, car CHECK ne peut pas lire une autre table) :
 --  * cardinalité = numbers_count du set_type ;
 --  * bornes number_min..number_max ;
---  * pas de doublon dans le tableau ; tableau trié à l'insertion.
+--  * pas de doublon dans le tableau.
+-- PHASE 11 (migration preserve_draw_order) : le tableau porte l'ORDRE DE
+-- SORTIE des boules tel que publié par la source — information métier.
+-- Toute logique d'ANALYSE doit rester ENSEMBLISTE (le loader ML fait
+-- sorted(set(...))) ; la vue core.v_draw_numbers expose `position` = rang
+-- de sortie pour les analyses d'ordre futures.
 -- Justification : à ~9 000 tirages/an (multi-tirages/jour), le tableau + GIN
 -- couvre les requêtes « tirages contenant le numéro N » et unnest() alimente
 -- toutes les agrégations. Volume trop faible pour justifier une table de faits.

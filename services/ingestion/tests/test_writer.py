@@ -58,15 +58,15 @@ def _cleanup(rl: RunLogger) -> None:
         conn.execute(delete(runs_t).where(runs_t.c.id == rl.run_id))  # events cascadent
 
 
-def test_insert_puis_idempotence_puis_conflit(runlog):
+def test_insert_idempotence_reordre_puis_conflit(runlog):
     writer = DrawWriter(runlog)
 
     # 1) Insertion : draw_type créé automatiquement, tirage + 2 ensembles.
+    #    L'ORDRE PUBLIÉ (ordre de sortie des boules) est préservé tel quel.
     stats = writer.write([make_draw([89, 4, 58, 17, 33], [1, 2, 3, 4, 5])])
     assert stats.inserted == 1 and stats.duplicates == 0 and stats.conflicts == 0
     assert TEST_CODE in stats.created_draw_types
 
-    # Le trigger a trié les numéros à l'insertion.
     engine = get_engine()
     draws_t = table("core", "draws")
     sets_t = table("core", "draw_number_sets")
@@ -74,17 +74,34 @@ def test_insert_puis_idempotence_puis_conflit(runlog):
         draw_id = conn.execute(
             select(draws_t.c.id).where(draws_t.c.ingestion_run_id == runlog.run_id)
         ).scalar_one()
-        numbers = [
-            sorted(row.numbers)
-            for row in conn.execute(select(sets_t.c.numbers).where(sets_t.c.draw_id == draw_id))
-        ]
-    assert sorted(map(tuple, numbers)) == [(1, 2, 3, 4, 5), (4, 17, 33, 58, 89)]
+        stored = sorted(
+            (list(row.numbers) for row in conn.execute(
+                select(sets_t.c.numbers).where(sets_t.c.draw_id == draw_id)
+            )),
+            key=len,
+        )
+    assert [89, 4, 58, 17, 33] in stored, "ordre de sortie préservé à l'insertion"
+    assert [1, 2, 3, 4, 5] in stored
 
-    # 2) Re-collecte identique : no-op compté en duplicates (idempotence).
-    stats2 = writer.write([make_draw([4, 17, 33, 58, 89], [1, 2, 3, 4, 5])])
+    # 2) Re-collecte STRICTEMENT identique : no-op compté en duplicates.
+    stats2 = writer.write([make_draw([89, 4, 58, 17, 33], [1, 2, 3, 4, 5])])
     assert stats2.inserted == 0 and stats2.duplicates == 1 and stats2.conflicts == 0
+    assert stats2.reordered == 0
 
-    # 3) Numéros différents : SOURCE_CONFLICT, données existantes conservées.
+    # 2b) Même ENSEMBLE mais ordre différent (cas historique trié en base) :
+    #     l'ordre publié fait foi → restauration comptée en `reordered`,
+    #     PAS de conflit, PAS d'update « lourd ».
+    stats2b = writer.write([make_draw([4, 17, 33, 58, 89], [1, 2, 3, 4, 5])])
+    assert stats2b.reordered == 1 and stats2b.conflicts == 0 and stats2b.updated == 0
+    with engine.connect() as conn:
+        winning_now = [
+            list(row.numbers)
+            for row in conn.execute(select(sets_t.c.numbers).where(sets_t.c.draw_id == draw_id))
+            if len(row.numbers) == 5 and sorted(row.numbers) == [4, 17, 33, 58, 89]
+        ]
+    assert winning_now == [[4, 17, 33, 58, 89]], "ordre mis à jour vers l'ordre publié"
+
+    # 3) Numéros différents EN ENSEMBLE : SOURCE_CONFLICT, existant conservé.
     stats3 = writer.write([make_draw([10, 20, 30, 40, 50], [1, 2, 3, 4, 5])])
     assert stats3.conflicts == 1 and stats3.inserted == 0
     issues_t = table("ops", "data_quality_issues")

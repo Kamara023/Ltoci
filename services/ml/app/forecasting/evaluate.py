@@ -71,7 +71,10 @@ def _evaluate(runlog: RunLogger) -> dict:
             ).scalar()
             if actual is None:
                 continue
-            actual_set = set(int(n) for n in actual)
+            # `actual` porte l'ORDRE DE SORTIE publié — conservé tel quel dans
+            # le résultat ; les hits se calculent en ensembliste.
+            actual_order = [int(n) for n in actual]
+            actual_set = set(actual_order)
 
             entry_rows = conn.execute(
                 select(entries_t.c.rank, entries_t.c.number)
@@ -87,7 +90,7 @@ def _evaluate(runlog: RunLogger) -> dict:
                 insert(results_t).values(
                     forecast_id=row.id,
                     actual_draw_id=row.draw_id,
-                    actual_numbers=sorted(actual_set),
+                    actual_numbers=actual_order,
                     hits_top5=len(matched5),
                     hits_top10=len(matched10),
                     matched_numbers=matched5,

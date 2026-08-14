@@ -22,9 +22,10 @@ coverage/
 .pytest_cache/
 .ruff_cache/
 
-# IDE / OS
+# IDE / OS / outils d'assistance (réglages locaux, propres à la machine)
 .vscode/
 .idea/
+.claude/
 Thumbs.db
 .DS_Store
 

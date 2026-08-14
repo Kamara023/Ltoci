@@ -105,7 +105,8 @@ describe('Admin quality (e2e)', () => {
     const winning = res.body.draw.numberSets.find(
       (s: { numbers: number[] }) => s.numbers.length === 5,
     );
-    expect(winning.numbers).toEqual([4, 17, 33, 58, 89]); // trié par le trigger
+    // L'ordre saisi est PRÉSERVÉ (ordre de sortie — migration preserve_draw_order).
+    expect(winning.numbers).toEqual([89, 4, 58, 17, 33]);
     // Sans re-contrôle (ingestion absente) : PENDING_REVIEW ; avec : VALID
     // (MISSING_SET ancien auto-résolu). Les deux sont corrects.
     expect(['PENDING_REVIEW', 'VALID']).toContain(res.body.draw.status);

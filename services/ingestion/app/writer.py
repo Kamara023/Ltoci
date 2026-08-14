@@ -4,12 +4,19 @@ Sémantique d'upsert sur la clé naturelle (game, draw_type, draw_date) :
 - tirage inconnu                → insertion (statut PENDING_REVIEW) ;
 - identique à l'existant        → no-op compté en `duplicates` (idempotence) ;
 - ensemble machine manquant complété → `updated` ;
-- numéros DIFFÉRENTS de l'existant   → data_quality_issues(SOURCE_CONFLICT),
-  statut repassé à PENDING_REVIEW, données existantes CONSERVÉES.
+- même ENSEMBLE mais ordre stocké ≠ ordre publié → restauration de l'ordre,
+  compté en `reordered` (l'ordre de sortie des boules est une information
+  métier — PHASE 11) ;
+- numéros DIFFÉRENTS de l'existant (en tant qu'ENSEMBLE) →
+  data_quality_issues(SOURCE_CONFLICT), statut repassé à PENDING_REVIEW,
+  données existantes CONSERVÉES.
 
+L'ORDRE PUBLIÉ par la source est préservé tel quel dans
+draw_number_sets.numbers ; toutes les COMPARAISONS restent ensemblistes.
 Les types de tirage inconnus sont créés automatiquement (référentiel piloté
 par les données réelles de la source, cf. décision PHASE 2).
-Le trigger SQL core.check_draw_number_set garantit cardinalité/bornes/tri.
+Le trigger SQL core.check_draw_number_set garantit cardinalité/bornes/unicité
+(sans tri depuis la migration preserve_draw_order).
 """
 
 from __future__ import annotations
@@ -38,6 +45,10 @@ class WriteStats:
     duplicates: int = 0
     conflicts: int = 0
     invalid: int = 0
+    # Même ensemble, ordre stocké corrigé vers l'ordre publié. Hors `updated`
+    # exprès : un pur ré-ordonnancement ne doit pas déclencher la chaîne
+    # stats/ML (les statistiques sont insensibles à l'ordre).
+    reordered: int = 0
     created_draw_types: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict:
@@ -48,6 +59,7 @@ class WriteStats:
             "duplicates": self.duplicates,
             "conflicts": self.conflicts,
             "invalid": self.invalid,
+            "reordered": self.reordered,
             "created_draw_types": self.created_draw_types,
         }
 
@@ -140,11 +152,13 @@ class DrawWriter:
             )
         ).first()
 
+        # ORDRE PUBLIÉ préservé tel quel — les comparaisons plus bas sont
+        # ensemblistes (tri au moment de comparer, jamais au stockage).
         wanted: dict[str, list[int]] = {}
         if parsed.winning is not None:
-            wanted["WINNING"] = sorted(parsed.winning)
+            wanted["WINNING"] = list(parsed.winning)
         if parsed.machine is not None:
-            wanted["MACHINE"] = sorted(parsed.machine)
+            wanted["MACHINE"] = list(parsed.machine)
 
         if existing is None:
             draw_id = conn.execute(
@@ -172,17 +186,19 @@ class DrawWriter:
             stats.inserted += 1
             return
 
-        # Tirage déjà présent : comparaison ensemble par ensemble.
+        # Tirage déjà présent : comparaison ENSEMBLISTE, ensemble par ensemble.
         set_types = table("core", "game_number_set_types")
         rows = conn.execute(
-            select(set_types.c.code, sets_t.c.numbers)
+            select(sets_t.c.id, set_types.c.code, sets_t.c.numbers)
             .select_from(sets_t.join(set_types, sets_t.c.set_type_id == set_types.c.id))
             .where(sets_t.c.draw_id == existing.id)
         ).all()
-        current = {row.code: sorted(row.numbers) for row in rows}
+        current = {row.code: list(row.numbers) for row in rows}
+        current_ids = {row.code: row.id for row in rows}
 
         conflict = False
         added = False
+        reordered = False
         for set_code, numbers in wanted.items():
             if set_code not in current:
                 conn.execute(
@@ -193,8 +209,17 @@ class DrawWriter:
                     )
                 )
                 added = True
-            elif current[set_code] != numbers:
+            elif sorted(current[set_code]) != sorted(numbers):
                 conflict = True
+            elif current[set_code] != numbers:
+                # Même ensemble, ordre différent : la source fait foi —
+                # restauration de l'ordre de sortie publié.
+                conn.execute(
+                    update(sets_t)
+                    .where(sets_t.c.id == current_ids[set_code])
+                    .values(numbers=numbers)
+                )
+                reordered = True
 
         if conflict:
             issues = table("ops", "data_quality_issues")
@@ -225,5 +250,7 @@ class DrawWriter:
             )
         elif added:
             stats.updated += 1
+        elif reordered:
+            stats.reordered += 1
         else:
             stats.duplicates += 1
