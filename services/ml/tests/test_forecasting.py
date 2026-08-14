@@ -10,7 +10,7 @@ import uuid
 
 import numpy as np
 import pytest
-from sqlalchemy import delete, insert, select, text
+from sqlalchemy import ARRAY, SmallInteger, cast, delete, func, insert, select, text
 
 from app.core.db import db_is_up, get_engine, table
 from app.forecasting.consensus import (
@@ -54,6 +54,33 @@ INTERPRETABLE_ONLY = {
     "STRATEGY_FREQUENCY": 1.0,
     "STRATEGY_RECENCY": 1.0,
 }
+
+
+def test_cible_prochaine_occurrence_selon_calendrier():
+    """La cible d'une prévision est le PROCHAIN tirage réel du type, d'après
+    son calendrier hebdomadaire — jamais un jour où le jeu ne sort pas."""
+    from app.forecasting.service import next_target_date
+
+    vendredi = dt.date(2026, 8, 14)  # ISO 5
+
+    # Jeu quotidien : aujourd'hui s'il n'a pas encore tiré, demain sinon.
+    tous_les_jours = [1, 2, 3, 4, 5, 6, 7]
+    assert next_target_date(tous_les_jours, vendredi, False) == vendredi
+    assert next_target_date(tous_les_jours, vendredi, True) == dt.date(2026, 8, 15)
+
+    # Jeu du lundi : depuis vendredi, la prochaine occurrence est le lundi.
+    assert next_target_date([1], vendredi, False) == dt.date(2026, 8, 17)
+
+    # Jeu du vendredi déjà tiré aujourd'hui : vendredi PROCHAIN (+7 jours).
+    assert next_target_date([5], vendredi, True) == dt.date(2026, 8, 21)
+    assert next_target_date([5], vendredi, False) == vendredi
+
+    # Week-end : samedi depuis vendredi.
+    assert next_target_date([6, 7], vendredi, False) == dt.date(2026, 8, 15)
+
+    # Calendrier inconnu (tirage exceptionnel) : AUCUNE prévision émise.
+    assert next_target_date([], vendredi, False) is None
+    assert next_target_date(None, vendredi, False) is None
 
 
 def test_consensus_structure_et_ranking():
@@ -165,6 +192,17 @@ def test_cycle_forecast_evaluation_immuabilite():
     results_t = table("ml", "forecast_results")
 
     with engine.connect() as conn:
+        # Tirage réel SANS prévision active sur la même cible : l'index unique
+        # uq_forecast_active_target interdit deux prévisions actives par cible.
+        occupied = (
+            select(forecasts_t.c.id)
+            .where(
+                (forecasts_t.c.draw_type_id == draws_t.c.draw_type_id)
+                & (forecasts_t.c.target_date == draws_t.c.draw_date)
+                & forecasts_t.c.superseded_at.is_(None)
+            )
+            .exists()
+        )
         draw = conn.execute(
             select(
                 draws_t.c.id,
@@ -178,7 +216,9 @@ def test_cycle_forecast_evaluation_immuabilite():
                     set_types_t, sets_t.c.set_type_id == set_types_t.c.id
                 )
             )
-            .where((draws_t.c.status == "VALID") & (set_types_t.c.code == "WINNING"))
+            .where(
+                (draws_t.c.status == "VALID") & (set_types_t.c.code == "WINNING") & ~occupied
+            )
             .order_by(draws_t.c.draw_date.desc())
             .limit(1)
         ).one()
@@ -286,15 +326,29 @@ def test_cycle_forecast_evaluation_immuabilite():
 
 @pytestmark_db
 def test_generation_reelle_et_supersede():
-    """generate_forecasts crée une prévision par type actif ; re-génération
-    = supersede tracé (jamais d'écrasement silencieux)."""
+    """generate_forecasts crée une prévision par tirage RÉELLEMENT à venir
+    (types au calendrier connu) ; re-génération = supersede tracé."""
     from app.forecasting.service import generate_forecasts
 
     forecasts_t = table("ml", "forecasts")
+    types_t = table("core", "draw_types")
     engine = get_engine()
 
+    with engine.connect() as conn:
+        with_schedule = conn.execute(
+            select(func.count())
+            .select_from(types_t)
+            .where(types_t.c.is_active & (types_t.c.days_of_week != cast([], ARRAY(SmallInteger))))
+        ).scalar()
+    if not with_schedule:
+        pytest.skip(
+            "Aucun type n'a de calendrier : lancer POST /internal/schedules/refresh "
+            "(service ingestion) avant ce test"
+        )
+
     r1 = generate_forecasts(triggered_by="test")["stats"]
-    assert r1["targets"] > 0
+    # Une cible par type au calendrier connu — jamais pour les autres.
+    assert r1["targets"] == with_schedule
     assert r1["created"] + r1["skipped_frozen"] == r1["targets"]
 
     r2 = generate_forecasts(triggered_by="test")["stats"]

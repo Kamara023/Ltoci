@@ -1,9 +1,15 @@
 """Génération des prévisions TOP 5 par tirage à venir + persistance FIGÉE.
 
-Cibles : pour chaque type de tirage actif — aujourd'hui si son tirage du
-jour n'est pas encore en base, sinon demain. Séquence du type si ≥ 300
-tirages, sinon séquence globale. Les modèles ML sont entraînés UNE fois
-sur l'historique global puis appliqués aux features de chaque cible.
+Cibles : pour chaque type de tirage actif, la PROCHAINE OCCURRENCE RÉELLE
+d'après son calendrier (core.draw_types.days_of_week, inféré de l'historique
+par le service ingestion) — aujourd'hui si le tirage du jour n'est pas encore
+collecté, sinon le prochain jour programmé. Un type au calendrier inconnu
+(tirages exceptionnels type « day-off ») ne reçoit AUCUNE prévision : on ne
+prédit pas une date qu'on ignore.
+
+Séquence du type si ≥ 300 tirages, sinon séquence globale. Les modèles ML sont
+entraînés UNE fois sur l'historique global puis appliqués aux features de
+chaque cible.
 
 FIGÉ : une prévision active non évaluée peut être remplacée (supersede
 tracé, l'historique est conservé) ; une prévision ÉVALUÉE est immuable
@@ -30,6 +36,29 @@ FORECAST_SOURCE = "forecast-engine"
 MIN_TYPE_HISTORY = 300
 
 
+def next_target_date(
+    days_of_week: list[int] | None,
+    today: dt.date,
+    already_drawn_today: bool,
+) -> dt.date | None:
+    """Prochaine date de tirage d'un type d'après son calendrier hebdomadaire.
+
+    PURE : entièrement testable. `days_of_week` en jours ISO (1=lundi…7=dimanche);
+    vide ou None => calendrier inconnu => None (aucune prévision émise).
+    """
+    if not days_of_week:
+        return None
+    allowed = set(days_of_week)
+    for offset in range(0, 8):
+        candidate = today + dt.timedelta(days=offset)
+        if candidate.isoweekday() not in allowed:
+            continue
+        if offset == 0 and already_drawn_today:
+            continue  # le tirage du jour est déjà tombé : viser le suivant
+        return candidate
+    return None
+
+
 def generate_forecasts(triggered_by: str = "manual") -> dict:
     runlog = RunLogger(FORECAST_SOURCE, triggered_by)
     try:
@@ -54,6 +83,43 @@ def _consensus_config(conn) -> dict[str, float]:
     if isinstance(row, dict) and isinstance(row.get("model_weights"), dict):
         return {str(k): float(v) for k, v in row["model_weights"].items()}
     return dict(DEFAULT_MODEL_WEIGHTS)
+
+
+def _supersede_future(
+    engine_db,
+    forecasts_t,
+    results_t,
+    config,
+    type_id: str,
+    conn=None,
+    today: dt.date | None = None,
+) -> int:
+    """Archive les prévisions ACTIVES et non évaluées de ce type visant
+    aujourd'hui ou plus tard : leur cible est caduque (calendrier affiné).
+
+    Jamais de suppression — l'historique des expériences reste intact. Les
+    cibles PASSÉES sont laissées au délai de grâce de l'évaluation : la source
+    publie parfois un tirage avec un jour de retard.
+    """
+    today = today or dt.date.today()
+    has_result = (
+        select(results_t.c.id).where(results_t.c.forecast_id == forecasts_t.c.id).exists()
+    )
+    statement = (
+        update(forecasts_t)
+        .where(
+            (forecasts_t.c.game_id == config.game_id)
+            & (forecasts_t.c.draw_type_id == type_id)
+            & forecasts_t.c.superseded_at.is_(None)
+            & (forecasts_t.c.target_date >= today)
+            & ~has_result
+        )
+        .values(superseded_at=dt.datetime.now(dt.UTC))
+    )
+    if conn is not None:
+        return conn.execute(statement).rowcount or 0
+    with engine_db.begin() as own_conn:
+        return own_conn.execute(statement).rowcount or 0
 
 
 def _generate(runlog: RunLogger) -> dict:
@@ -88,7 +154,7 @@ def _generate(runlog: RunLogger) -> dict:
 
     with engine_db.connect() as conn:
         active_types = conn.execute(
-            select(types_t.c.id, types_t.c.code)
+            select(types_t.c.id, types_t.c.code, types_t.c.days_of_week)
             .where((types_t.c.game_id == config.game_id) & types_t.c.is_active)
             .order_by(types_t.c.code)
         ).all()
@@ -105,9 +171,20 @@ def _generate(runlog: RunLogger) -> dict:
     created = 0
     superseded = 0
     skipped = 0
+    no_schedule: list[str] = []
     for type_row in active_types:
         type_id = str(type_row.id)
-        target = today if type_id not in drawn_today else today + dt.timedelta(days=1)
+        target = next_target_date(
+            list(type_row.days_of_week or []), today, type_id in drawn_today
+        )
+        if target is None:
+            # Calendrier inconnu (tirage exceptionnel) : aucune prévision, et
+            # les éventuelles prévisions à venir héritées d'un calendrier
+            # antérieur sont archivées — elles annonceraient un tirage dont
+            # personne ne connaît la date.
+            no_schedule.append(type_row.code)
+            superseded += _supersede_future(engine_db, forecasts_t, results_t, config, type_id)
+            continue
 
         type_seq = seq_global[seq_global["draw_type_id"] == type_id]
         use_type_seq = len(type_seq) >= MIN_TYPE_HISTORY
@@ -137,12 +214,10 @@ def _generate(runlog: RunLogger) -> dict:
                 if has_result:
                     skipped += 1  # évaluée = immuable, on ne touche à rien
                     continue
-                conn.execute(
-                    update(forecasts_t)
-                    .where(forecasts_t.c.id == existing)
-                    .values(superseded_at=dt.datetime.now(dt.UTC))
-                )
-                superseded += 1
+
+            superseded += _supersede_future(
+                engine_db, forecasts_t, results_t, config, type_id, conn=conn, today=today
+            )
 
             forecast_id = conn.execute(
                 insert(forecasts_t)
@@ -155,6 +230,10 @@ def _generate(runlog: RunLogger) -> dict:
                     config={
                         "sequence": "type" if use_type_seq else "global",
                         "draws_used": int(len(type_seq) if use_type_seq else len(seq_global)),
+                        # Historique PROPRE à ce tirage : dit pourquoi on est
+                        # retombé sur la séquence globale (< MIN_TYPE_HISTORY).
+                        "type_draws": int(len(type_seq)),
+                        "min_type_history": MIN_TYPE_HISTORY,
                         "model_weights": model_weights,
                     },
                 )
@@ -175,11 +254,18 @@ def _generate(runlog: RunLogger) -> dict:
         created += 1
 
     stats = {
-        "targets": len(active_types),
+        "targets": len(active_types) - len(no_schedule),
         "created": created,
         "superseded": superseded,
         "skipped_frozen": skipped,
+        "skipped_no_schedule": len(no_schedule),
         "cutoff_draw_id": data.last_draw_id,
     }
+    if no_schedule:
+        runlog.event(
+            "INFO",
+            f"{len(no_schedule)} type(s) sans calendrier connu — aucune prévision émise",
+            {"types": sorted(no_schedule)[:20]},
+        )
     runlog.event("INFO", "Prévisions générées", stats)
     return stats

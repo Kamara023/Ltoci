@@ -32,16 +32,24 @@ export class ForecastsService {
     });
   }
 
-  /** Prévisions actives (non évaluées) pour les prochains tirages, par type. */
+  /** Prévisions actives (non évaluées) pour les prochains tirages, par type.
+   * Garde-fou : jamais de date cible passée — un tirage déjà écoulé n'est pas
+   * « à venir », même si son résultat n'a pas encore été publié par la source. */
   async next(userId: string | null) {
     await this.assertAccess(userId);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const rows = await this.prisma.forecast.findMany({
-      where: { supersededAt: null, result: null },
+      where: { supersededAt: null, result: null, targetDate: { gte: today } },
       include: {
         drawType: { select: { code: true, name: true, scheduledTime: true } },
         entries: { orderBy: { rank: 'asc' } },
       },
-      orderBy: [{ targetDate: 'asc' }, { drawType: { code: 'asc' } }],
+      orderBy: [
+        { targetDate: 'asc' },
+        { drawType: { scheduledTime: 'asc' } },
+        { drawType: { code: 'asc' } },
+      ],
     });
     return {
       data: rows.map((f) => this.serializeForecast(f)),

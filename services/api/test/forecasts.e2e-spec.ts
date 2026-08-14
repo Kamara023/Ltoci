@@ -76,6 +76,13 @@ describe('Forecasts (e2e)', () => {
     );
     expect(targets.size).toBe(res.body.data.length); // une prévision active par cible
 
+    // Garde-fou : « à venir » ne contient JAMAIS une date déjà passée, et les
+    // cibles sont rendues dans l'ordre chronologique.
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const dates = res.body.data.map((f: { targetDate: string }) => f.targetDate);
+    for (const d of dates) expect(d >= todayIso).toBe(true);
+    expect([...dates].sort()).toEqual(dates);
+
     const f = res.body.data[0];
     expect(f.top5).toHaveLength(5);
     expect(f.top10).toHaveLength(10);

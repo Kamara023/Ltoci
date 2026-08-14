@@ -47,15 +47,31 @@ types), paires et formes matérialisées ; exactitude prouvée par les tests
 
 ### 3. Moteur de prévision par tirage
 **Attendu :** une prévision pour CHAQUE prochain tirage de chaque jeu (multi-tirages/jour).
-**Constaté :** 39 types de tirage actifs → **39 prévisions actives**, une par
-type, cible = prochaine occurrence réelle (35 pour aujourd'hui, 4 pour demain
-— les 35 types dont le tirage du jour n'était pas encore collecté).
+
+**Défaut trouvé le 14/08 et corrigé.** La première version ciblait « aujourd'hui,
+sinon demain » pour les 39 types — or la source ne publie **aucun calendrier** et
+seuls ~10 types tirent un jour donné. Les prévisions des types qui ne tiraient pas
+s'accumulaient sans jamais pouvoir être évaluées : `/forecasts/next` renvoyait
+**95 cartes dont 30 datées de la veille**.
+
+**Correction :** le calendrier de chaque type est désormais **inféré de son
+historique** (service ingestion, `app/schedules.py` : un jour de la semaine est
+retenu s'il est honoré ≥ 60 % du temps, fenêtre partant du premier tirage du type)
+et rafraîchi après chaque collecte. Le moteur cible alors la **prochaine occurrence
+réelle** ; un type sans rythme hebdomadaire (`day-off` : tirages de jours fériés)
+ne reçoit aucune prévision plutôt qu'une date inventée.
+
+**Constaté après correction :** 39 types → 36 au calendrier connu, **36 prévisions
+actives**, une par prochain tirage réel, plus aucune cible passée.
 ```sql
 SELECT target_date, count(*) FROM ml.forecasts
-WHERE superseded_at IS NULL GROUP BY target_date;
--- 2026-08-13: 35 | 2026-08-14: 4
+WHERE superseded_at IS NULL AND target_date >= current_date GROUP BY target_date;
+-- 08-14: 7 (tirages restants du jour) | 08-15: 8 | 08-16→08-20: 4/jour | 08-21: 1
 ```
-**Verdict : OPÉRATIONNEL (nouveau en PHASE 11).**
+Calendrier inféré conforme à l'observation : quotidiens (`afterwork`,
+`digital-21h/22h/23h`…), hebdomadaires à jour fixe (`akwaba` lundi, `kado` jeudi…),
+week-end (`special-weekend-1h/3h`), 3 irréguliers écartés.
+**Verdict : OPÉRATIONNEL (corrigé le 14/08).**
 
 ### 4. Scoring des numéros
 **Attendu :** chaque numéro reçoit un score composite traçable.

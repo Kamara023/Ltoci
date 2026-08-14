@@ -16,6 +16,7 @@ from app.importers.files import PARSERS_BY_KIND
 from app.parsers.lonaci_api import FormatChangeError
 from app.quality.runner import run_quality
 from app.runlog import RunLogger
+from app.schedules import refresh_draw_type_schedules
 from app.writer import DrawWriter
 
 log = structlog.get_logger()
@@ -43,13 +44,19 @@ class CollectRequest(BaseModel):
 
 
 def _chain_quality(runlog: RunLogger, stats: dict) -> None:
-    """Statue immédiatement les tirages en attente après une ingestion.
-    Best-effort : un échec du contrôle qualité n'invalide pas l'ingestion."""
+    """Statue immédiatement les tirages en attente après une ingestion, puis
+    rafraîchit le calendrier des types (le moteur de prévisions en dépend
+    pour cibler le PROCHAIN tirage réel de chaque jeu).
+    Best-effort : un échec de ces chaînages n'invalide pas l'ingestion."""
     try:
         quality = run_quality("pending", triggered_by="chained")
         stats["quality"] = quality["stats"]
     except Exception as exc:  # noqa: BLE001
         runlog.event("WARN", f"Contrôle qualité enchaîné en échec : {exc}")
+    try:
+        stats["schedules"] = refresh_draw_type_schedules(runlog)
+    except Exception as exc:  # noqa: BLE001
+        runlog.event("WARN", f"Rafraîchissement du calendrier en échec : {exc}")
 
 
 def _collect_latest(triggered_by: str) -> dict:
@@ -121,6 +128,18 @@ def collect(req: CollectRequest, background: BackgroundTasks) -> dict:
             "detail": "Backfill lancé en tâche de fond — suivre ops.ingestion_runs",
         }
     raise HTTPException(status_code=422, detail=f"Mode inconnu : {req.mode}")
+
+
+@router.post("/schedules/refresh")
+def schedules_refresh() -> dict:
+    """Recalcule le calendrier (jours/heure) de chaque type depuis l'historique.
+    Enchaîné après chaque collecte ; exposé pour un rafraîchissement manuel."""
+    if not db_is_up():
+        raise HTTPException(status_code=503, detail="Base de données indisponible")
+    try:
+        return refresh_draw_type_schedules()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Calendrier non calculé : {exc}") from exc
 
 
 class QualityRequest(BaseModel):

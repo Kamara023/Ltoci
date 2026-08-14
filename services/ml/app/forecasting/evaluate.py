@@ -1,12 +1,20 @@
 """Évaluation automatique des prévisions : dès que le tirage cible est en
 base (VALID), comparaison TOP 5/TOP 10 vs numéros gagnants réels, insertion
 du résultat IMMUABLE (trigger SQL). Appelée après chaque collecte.
+
+Nettoyage : une prévision dont la date cible est dépassée depuis plus de
+GRACE_DAYS sans qu'aucun tirage ne soit arrivé ne sera JAMAIS évaluable
+(tirage annulé, ou calendrier du type mal estimé au moment de la génération).
+Elle est alors SUPERSEDÉE — jamais supprimée : l'historique des expériences
+reste intact, mais elle cesse d'apparaître comme « tirage à venir ».
 """
 
 from __future__ import annotations
 
+import datetime as dt
+
 import structlog
-from sqlalchemy import insert, select
+from sqlalchemy import and_, insert, select, update
 
 from app.core.db import get_engine, table
 from app.core.runlog import RunLogger
@@ -14,6 +22,8 @@ from app.core.runlog import RunLogger
 log = structlog.get_logger()
 
 FORECAST_SOURCE = "forecast-engine"
+# Délai de grâce : la source publie parfois un tirage avec un jour de retard.
+GRACE_DAYS = 2
 
 
 def evaluate_forecasts(triggered_by: str = "manual") -> dict:
@@ -104,7 +114,50 @@ def _evaluate(runlog: RunLogger) -> dict:
                 f"Hit notable : {len(matched5)}/5 sur {row.target_date} (numéros {matched5})",
             )
 
-    stats = {"evaluated": evaluated, "hits_top5_distribution": hits_summary}
-    if evaluated:
+    obsolete = _supersede_unevaluable(engine_db, forecasts_t, results_t, draws_t, runlog)
+
+    stats = {
+        "evaluated": evaluated,
+        "hits_top5_distribution": hits_summary,
+        "superseded_unevaluable": obsolete,
+    }
+    if evaluated or obsolete:
         runlog.event("INFO", "Évaluations effectuées", stats)
     return stats
+
+
+def _supersede_unevaluable(engine_db, forecasts_t, results_t, draws_t, runlog: RunLogger) -> int:
+    """Retire des « tirages à venir » les prévisions devenues inévaluables :
+    cible dépassée de plus de GRACE_DAYS et aucun tirage correspondant."""
+    cutoff = dt.date.today() - dt.timedelta(days=GRACE_DAYS)
+    has_draw = (
+        select(draws_t.c.id)
+        .where(
+            and_(
+                draws_t.c.draw_type_id == forecasts_t.c.draw_type_id,
+                draws_t.c.draw_date == forecasts_t.c.target_date,
+            )
+        )
+        .exists()
+    )
+    has_result = (
+        select(results_t.c.id).where(results_t.c.forecast_id == forecasts_t.c.id).exists()
+    )
+    with engine_db.begin() as conn:
+        result = conn.execute(
+            update(forecasts_t)
+            .where(
+                forecasts_t.c.superseded_at.is_(None)
+                & (forecasts_t.c.target_date < cutoff)
+                & ~has_result
+                & ~has_draw
+            )
+            .values(superseded_at=dt.datetime.now(dt.UTC))
+        )
+    count = result.rowcount or 0
+    if count:
+        runlog.event(
+            "INFO",
+            f"{count} prévision(s) sans tirage correspondant archivée(s) (cible < {cutoff})",
+        )
+    return count

@@ -32,6 +32,7 @@ export interface Forecast {
   targetDate: string;
   generatedAt: string;
   lockedAt: string;
+  config?: { sequence?: 'type' | 'global'; draws_used?: number; type_draws?: number };
   top5: ForecastEntry[];
   top10: ForecastEntry[];
   result?: {
@@ -157,10 +158,20 @@ export function ForecastCard({ forecast }: { forecast: Forecast }) {
 
       {forecast.result ? (
         <p className="mt-3 text-xs text-ink-2">
-          Numéros réellement sortis :{' '}
+          Numéros réellement sortis (ordre de sortie) :{' '}
           <span className="tabular-nums">
             {forecast.result.actualNumbers.join(' · ')}
           </span>
+        </p>
+      ) : null}
+
+      {forecast.config?.sequence === 'global' ? (
+        <p className="mt-2 text-xs text-ink-3">
+          Historique propre à ce tirage trop court
+          {typeof forecast.config.type_draws === 'number'
+            ? ` (${forecast.config.type_draws} tirages)`
+            : ''}{' '}
+          : prévision calculée sur l&apos;historique de tous les tirages confondus.
         </p>
       ) : null}
 
@@ -242,11 +253,7 @@ export function ForecastsHub() {
         next.isLoading ? (
           <p className="py-8 text-center text-ink-2">Chargement…</p>
         ) : next.data?.data.length ? (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {next.data.data.map((f) => (
-              <ForecastCard key={f.id} forecast={f} />
-            ))}
-          </div>
+          <UpcomingByDay forecasts={next.data.data} />
         ) : (
           <p className="py-8 text-center text-ink-2">
             Aucune prévision active — elles sont générées automatiquement après chaque collecte.
@@ -274,6 +281,51 @@ export function ForecastsHub() {
       ) : (
         <p className="py-8 text-center text-ink-2">{STR.dataUnavailable}</p>
       )}
+    </div>
+  );
+}
+
+/** Libellé humain d'une date cible : Aujourd'hui / Demain / date longue. */
+function dayLabel(iso: string): string {
+  const target = new Date(`${iso}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.round((target.getTime() - today.getTime()) / 86_400_000);
+  if (diff === 0) return "Aujourd'hui";
+  if (diff === 1) return 'Demain';
+  return target.toLocaleDateString('fr-FR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+  });
+}
+
+/** Prochains tirages regroupés par jour, dans l'ordre chronologique. */
+function UpcomingByDay({ forecasts }: { forecasts: Forecast[] }) {
+  const days = new Map<string, Forecast[]>();
+  for (const f of forecasts) {
+    const list = days.get(f.targetDate) ?? [];
+    list.push(f);
+    days.set(f.targetDate, list);
+  }
+  return (
+    <div className="space-y-6">
+      {[...days.entries()].map(([date, list]) => (
+        <section key={date}>
+          <h2 className="mb-2 flex items-baseline gap-2">
+            <span className="font-semibold capitalize">{dayLabel(date)}</span>
+            <span className="text-sm text-ink-3">
+              {list.length} tirage{list.length > 1 ? 's' : ''} ·{' '}
+              {new Date(`${date}T00:00:00`).toLocaleDateString('fr-FR')}
+            </span>
+          </h2>
+          <div className="grid gap-3 lg:grid-cols-2">
+            {list.map((f) => (
+              <ForecastCard key={f.id} forecast={f} />
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
